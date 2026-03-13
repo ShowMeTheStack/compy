@@ -1,0 +1,36 @@
+:root {
+  color-scheme: dark;
+  --bg: #1e1e1e;
+  --fg: #d4d4d4;
+  --accent: #4ec9b0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.shell {
+  padding: 2rem;
+}
+
+.shell h1 {
+  color: var(--accent);
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #333;
+  padding: 0.25rem 0.75rem;
+  text-align: left;
+}
