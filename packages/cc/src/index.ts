@@ -6,3 +6,6 @@ export * from './preprocessor';
 export * as ast from './ast';
 export * from './ast';
 export * from './parser';
+export * as types from './types';
+export * from './types';
+export * from './sema';
