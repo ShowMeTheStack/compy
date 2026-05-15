@@ -239,7 +239,19 @@ class Sema {
       this.scope.tags.set(spec.tag, incomplete);
       return T.withQual(incomplete, outer.qualConst, outer.qualVolatile);
     }
-    // A definition.
+    // A definition. Register an incomplete placeholder for the tag FIRST so a
+    // self-referential field (`struct Node *next;`) resolves to this same type.
+    const placeholder: T.StructType | T.UnionType = {
+      kind: spec.su,
+      tag: spec.tag,
+      fields: [],
+      size: 0,
+      align: 1,
+      complete: false,
+      id: this.nextTagId++,
+    };
+    if (spec.tag) this.scope.tags.set(spec.tag, placeholder);
+
     const members: { name: string; type: T.CType; bitWidth?: number }[] = [];
     for (const f of spec.fields ?? []) {
       const fbase = this.baseType(f.specifiers);
@@ -249,12 +261,11 @@ class Sema {
       if (fname) members.push({ name: fname, type: ftype });
     }
     const laid = spec.su === 'struct' ? T.layoutStruct(members) : T.layoutUnion(members);
-    const type: T.CType =
-      spec.su === 'struct'
-        ? { kind: 'struct', tag: spec.tag, fields: laid.fields, size: laid.size, align: laid.align, complete: true, id: this.nextTagId++ }
-        : { kind: 'union', tag: spec.tag, fields: laid.fields, size: laid.size, align: laid.align, complete: true, id: this.nextTagId++ };
-    if (spec.tag) this.scope.tags.set(spec.tag, type);
-    return T.withQual(type, outer.qualConst, outer.qualVolatile);
+    placeholder.fields = laid.fields;
+    placeholder.size = laid.size;
+    placeholder.align = laid.align;
+    placeholder.complete = true;
+    return T.withQual(placeholder, outer.qualConst, outer.qualVolatile);
   }
 
   private enumType(spec: A.EnumSpec, outer: A.DeclSpecifiers): T.CType {
