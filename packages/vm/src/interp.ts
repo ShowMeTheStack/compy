@@ -152,14 +152,24 @@ export class Interp {
   }
 
   private allocateGlobals(): void {
+    // Link external-linkage globals by name so `extern int x;` and the defining
+    // `int x = …;` (possibly in different files) share one object.
+    const external = new Map<string, number>();
     for (const sym of this.sema.globals) {
       if (sym.kind !== 'var') continue;
+      if (sym.linkage === 'external') {
+        const shared = external.get(sym.name);
+        if (shared !== undefined) {
+          this.globalAddr.set(sym.id, shared);
+          continue;
+        }
+      }
       const size = Math.max(1, T.sizeof(sym.type));
-      // Zero-initialized globals go to BSS; the rest to DATA (teaching split).
+      // Zero-initialized globals go to BSS; initialized ones to DATA.
       const initDecl = this.findInitDecl(sym);
-      const hasNonZeroInit = !!initDecl?.init;
-      const addr = hasNonZeroInit ? this.mem.allocData(new Uint8Array(size)) : this.mem.allocBss(size);
+      const addr = initDecl?.init ? this.mem.allocData(new Uint8Array(size)) : this.mem.allocBss(size);
       this.globalAddr.set(sym.id, addr);
+      if (sym.linkage === 'external') external.set(sym.name, addr);
     }
   }
 
