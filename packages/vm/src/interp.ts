@@ -36,6 +36,11 @@ const NORMAL: Flow = { k: 'normal' };
 
 export type NativeFn = (ctx: Interp, args: Val[]) => Val | null;
 
+/** Debugger hook: called before each executable statement/declaration. */
+export interface DebugController {
+  before(interp: Interp, line: number, file: string): void;
+}
+
 export interface RunOptions {
   memory?: Memory;
   console?: Console;
@@ -44,6 +49,19 @@ export interface RunOptions {
   natives?: Record<string, NativeFn>;
   argv?: string[];
   maxSteps?: number;
+  debug?: DebugController;
+}
+
+export interface StackFrame {
+  name: string;
+  line: number;
+}
+
+export interface VarView {
+  name: string;
+  type: string;
+  addr: number;
+  value: string;
 }
 
 export interface RunResult {
@@ -77,6 +95,9 @@ export class Interp {
 
   private readonly globalAddr = new Map<number, number>();
   private locals: Map<number, number>[] = [];
+  readonly callStack: StackFrame[] = [];
+  private debug?: DebugController;
+  private readonly symById = new Map<number, SymbolInfo>();
   private readonly funcByName = new Map<string, FuncEntry>();
   private readonly funcByAddr = new Map<number, FuncEntry>();
   private readonly stringPool = new Map<string, number>();
@@ -94,7 +115,14 @@ export class Interp {
     this.natives = opts.natives ?? {};
     this.maxSteps = opts.maxSteps ?? 50_000_000;
     this.argv = opts.argv ?? ['program'];
+    this.debug = opts.debug;
     this.nextFuncAddr = this.mem.segments.text.start + 16;
+    for (const sym of sema.symOf.values()) this.symById.set(sym.id, sym);
+    for (const sym of sema.globals) this.symById.set(sym.id, sym);
+  }
+
+  setDebugController(d: DebugController | undefined): void {
+    this.debug = d;
   }
 
   // -- setup -----------------------------------------------------------------
@@ -211,6 +239,7 @@ export class Interp {
     const savedTop = this.mem.stackTop;
     const frame = new Map<number, number>();
     this.locals.push(frame);
+    this.callStack.push({ name: A.declaratorName(def.declarator) ?? '<fn>', line: def.declarator.span.start.line });
     try {
       if (def.declarator.kind === 'FunctionDeclarator') {
         const params = def.declarator.params.filter((p) => p.declarator || p.specifiers.typeSpecs.length);
@@ -228,6 +257,7 @@ export class Interp {
       return null;
     } finally {
       this.locals.pop();
+      this.callStack.pop();
       this.mem.popStackTo(savedTop);
     }
   }
@@ -265,7 +295,14 @@ export class Interp {
     return NORMAL;
   }
 
+  private hook(line: number, file: string): void {
+    const top = this.callStack[this.callStack.length - 1];
+    if (top) top.line = line;
+    this.debug!.before(this, line, file);
+  }
+
   private execDecl(d: A.Declaration): Flow {
+    if (this.debug && d.declarators.length > 0) this.hook(d.span.start.line, d.span.start.file);
     for (const init of d.declarators) {
       const sym = this.sema.symOf.get(init);
       if (!sym) continue;
@@ -301,6 +338,7 @@ export class Interp {
 
   private execStmt(s: A.Stmt): Flow {
     if (++this.steps > this.maxSteps) throw new CRuntimeError('execution step limit exceeded (infinite loop?)');
+    if (this.debug && s.kind !== 'CompoundStmt') this.hook(s.span.start.line, s.span.start.file);
     switch (s.kind) {
       case 'CompoundStmt':
         return this.execCompound(s);
@@ -825,6 +863,60 @@ export class Interp {
   /** Invoke a function pointer (native or user) — used by qsort/bsearch/atexit. */
   callFunctionPointer(addr: number, args: Val[]): Val | null {
     return this.callByAddr(addr, args);
+  }
+
+  callDepth(): number {
+    return this.callStack.length;
+  }
+
+  /** Locals/params of the current (top) call frame, with formatted values. */
+  frameVars(): VarView[] {
+    const frame = this.locals[this.locals.length - 1];
+    if (!frame) return [];
+    const out: VarView[] = [];
+    for (const [id, addr] of frame) {
+      const sym = this.symById.get(id);
+      if (!sym) continue;
+      out.push({ name: sym.name, type: T.formatType(sym.type), addr, value: this.formatAt(addr, sym.type) });
+    }
+    return out;
+  }
+
+  /** Global variables, with formatted values. */
+  globalVars(): VarView[] {
+    const out: VarView[] = [];
+    for (const sym of this.sema.globals) {
+      if (sym.kind !== 'var') continue;
+      const addr = this.globalAddr.get(sym.id);
+      if (addr === undefined) continue;
+      out.push({ name: sym.name, type: T.formatType(sym.type), addr, value: this.formatAt(addr, sym.type) });
+    }
+    return out;
+  }
+
+  /** Render the value at an address of a given type for the debugger UI. */
+  formatAt(addr: number, type: T.CType): string {
+    try {
+      if (type.kind === 'array') {
+        if (type.of.kind === 'int' && type.of.bytes === 1) return JSON.stringify(this.readCString(addr));
+        const n = Math.min(type.length ?? 0, 8);
+        const parts: string[] = [];
+        for (let k = 0; k < n; k++) parts.push(this.formatAt(addr + k * T.sizeof(type.of), type.of));
+        return '{' + parts.join(', ') + (type.length && type.length > n ? ', …' : '') + '}';
+      }
+      if (type.kind === 'struct' || type.kind === 'union') {
+        return '{' + type.fields.map((f) => `${f.name}=${this.formatAt(addr + f.offset, f.type)}`).join(', ') + '}';
+      }
+      const v = this.readMem(addr, type);
+      if (type.kind === 'float') return String(v.f);
+      if (type.kind === 'pointer') {
+        const p = Number(v.i);
+        return p === 0 ? 'NULL' : '0x' + p.toString(16);
+      }
+      return String(v.i);
+    } catch {
+      return '<?>';
+    }
   }
 
   exit(code: number): never {
