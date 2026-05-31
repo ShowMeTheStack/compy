@@ -50,6 +50,8 @@ export interface RunOptions {
   argv?: string[];
   maxSteps?: number;
   debug?: DebugController;
+  /** Called once with the interpreter just before run() returns (final inspect). */
+  onFinish?: (interp: Interp) => void;
 }
 
 export interface StackFrame {
@@ -68,6 +70,8 @@ export interface RunResult {
   exitCode: number;
   faults: CFault[];
   leaks: { addr: number; size: number }[];
+  /** A fatal memory fault that stopped the program, if any. */
+  fatal?: CFault;
 }
 
 interface FuncEntry {
@@ -91,6 +95,7 @@ export class Interp {
   private readonly unit: A.TranslationUnit;
   private readonly natives: Record<string, NativeFn>;
   private readonly maxSteps: number;
+  private readonly onFinish?: (interp: Interp) => void;
   private steps = 0;
 
   private readonly globalAddr = new Map<number, number>();
@@ -116,6 +121,7 @@ export class Interp {
     this.maxSteps = opts.maxSteps ?? 50_000_000;
     this.argv = opts.argv ?? ['program'];
     this.debug = opts.debug;
+    this.onFinish = opts.onFinish;
     this.nextFuncAddr = this.mem.segments.text.start + 16;
     for (const sym of sema.symOf.values()) this.symById.set(sym.id, sym);
     for (const sym of sema.globals) this.symById.set(sym.id, sym);
@@ -132,6 +138,7 @@ export class Interp {
     this.allocateGlobals();
     this.initGlobals();
     let exitCode = 0;
+    let fatal: CFault | undefined;
     try {
       const main = this.funcByName.get('main');
       if (!main || !main.def) throw new CRuntimeError('no main() function');
@@ -144,6 +151,7 @@ export class Interp {
         exitCode = e.code;
         this.runAtexit();
       } else if (e instanceof CFault) {
+        fatal = e;
         this.con.write('err', `\nRuntime fault: ${e.kind} at 0x${e.addr.toString(16)} — ${e.message}\n`);
         exitCode = 139; // SIGSEGV-ish
       } else if (e instanceof CRuntimeError) {
@@ -153,8 +161,13 @@ export class Interp {
         throw e;
       }
     }
+    try {
+      this.onFinish?.(this);
+    } catch {
+      /* inspection must never crash the run */
+    }
     const leaks = this.mem.leaks().map((b) => ({ addr: b.addr, size: b.size }));
-    return { exitCode, faults: this.mem.warnings.slice(), leaks };
+    return { exitCode, faults: this.mem.warnings.slice(), leaks, fatal };
   }
 
   private registerFunctions(): void {
