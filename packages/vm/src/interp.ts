@@ -421,25 +421,33 @@ export class Interp {
     const disc = Number(asInt(this.eval(s.disc)));
     const body = s.body;
     if (body.kind !== 'CompoundStmt') return NORMAL;
-    const items = body.items;
-    let start = -1;
-    let dflt = -1;
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i]!;
-      if (it.kind === 'CaseStmt') {
-        const v = Number(asInt(this.evalConst(it.value)));
-        if (v === disc) {
-          start = i;
-          break;
-        }
-      } else if (it.kind === 'DefaultStmt') {
-        dflt = i;
+
+    // Flatten the body: case/default labels may stack (`case 0: case 1: …`) and
+    // wrap real statements, so unwrap them into a linear statement list with a
+    // label → index map, mirroring C's flat switch semantics.
+    const flat: A.BlockItem[] = [];
+    const caseIndex = new Map<number, number>();
+    let defaultIndex = -1;
+    for (const item of body.items) {
+      let node: A.BlockItem = item;
+      for (;;) {
+        if (node.kind === 'CaseStmt') {
+          caseIndex.set(Number(asInt(this.evalConst(node.value))), flat.length);
+          node = node.stmt;
+        } else if (node.kind === 'DefaultStmt') {
+          defaultIndex = flat.length;
+          node = node.stmt;
+        } else if (node.kind === 'LabeledStmt') {
+          node = node.stmt;
+        } else break;
       }
+      flat.push(node);
     }
-    if (start < 0) start = dflt;
+
+    let start = caseIndex.has(disc) ? caseIndex.get(disc)! : defaultIndex;
     if (start < 0) return NORMAL;
-    for (let i = start; i < items.length; i++) {
-      const it = items[i]!;
+    for (let i = start; i < flat.length; i++) {
+      const it = flat[i]!;
       const f = it.kind === 'Declaration' ? this.execDecl(it) : this.execStmt(it);
       if (f.k === 'break') return NORMAL;
       if (f.k === 'return' || f.k === 'goto' || f.k === 'continue') return f;
@@ -481,7 +489,7 @@ export class Interp {
       case 'CharLit':
         return intVal(T.INT, BigInt(e.value));
       case 'StringLit':
-        return ptrVal(T.pointerTo(T.CHAR), this.internBytes(e.bytes));
+        return ptrVal(T.pointerTo(T.CHAR), this.internBytes([...e.bytes, 0]));
       case 'Ident':
         return this.evalIdent(e);
       case 'IndexExpr':

@@ -1,4 +1,4 @@
-import { Token, Span, Pos } from './token';
+import { Token, Span, Pos, isKeyword } from './token';
 import { Diagnostic, CompileError } from './diagnostic';
 import { parseIntLiteral, parseFloatLiteral, parseCharLiteral, parseStringLiteral, isFloatLiteral } from './literals';
 import * as A from './ast';
@@ -525,8 +525,8 @@ class Parser {
 
   private parseStatement(): A.Stmt {
     const start = this.cur();
-    // Labels
-    if (this.cur().kind === 'id' && this.isPunct(':', 1) && !this.isTypedefName(this.cur().value)) {
+    // Labels (an identifier, not a keyword like case/default, followed by ':')
+    if (this.cur().kind === 'id' && !isKeyword(this.cur().value) && this.isPunct(':', 1) && !this.isTypedefName(this.cur().value)) {
       const label = this.advance().value;
       this.advance(); // ':'
       return { kind: 'LabeledStmt', label, stmt: this.parseStatement(), span: this.spanFrom(start) };
