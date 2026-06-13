@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Editor, EditorDiagnostic } from './Editor';
 import { MemoryView } from './MemoryView';
+import { Chat } from './Chat';
+import { getEngine } from './ai';
 import { EXAMPLES } from './examples';
 import { ProjectState, loadProject, saveProject, addFile, removeFile } from './project';
 import { analyzeProject, execute, Outcome, Snapshot, AnalyzeResult } from './session';
 
-type PanelTab = 'memory' | 'stack' | 'cpp' | 'problems';
+type PanelTab = 'memory' | 'stack' | 'cpp' | 'problems' | 'assistant';
 
 export function App() {
   const [project, setProject] = useState<ProjectState>(() => loadProject());
@@ -114,6 +116,17 @@ export function App() {
     setTimeout(() => setGotoLine(null), 1500);
   };
 
+  const ghostProvider = (before: string, after: string): Promise<string> => {
+    const e = getEngine();
+    return e ? e.complete(before, after) : Promise.resolve('');
+  };
+  const insertCode = (code: string) => {
+    let n = 1;
+    let name = 'snippet.c';
+    while (project.files[name] !== undefined) name = `snippet${++n}.c`;
+    setProject((p) => ({ files: { ...p.files, [name]: code + '\n' }, active: name }));
+  };
+
   const stdout = debugging && snapshot ? outcome!.stdout.slice(0, snapshot.outLen) : outcome?.stdout ?? '';
   const stderr = outcome?.stderr ?? '';
   const errorCount = analysis?.diagnostics.filter((d) => d.severity === 'error').length ?? 0;
@@ -213,6 +226,7 @@ export function App() {
             diagnostics={editorDiags}
             currentLine={currentLine}
             onGotoDef={onGotoDef}
+            ghostProvider={ghostProvider}
           />
           <div className="console">
             <div className="console-out" data-testid="console">
@@ -233,9 +247,9 @@ export function App() {
 
         <div className="panel">
           <div className="panel-tabs">
-            {(['memory', 'stack', 'cpp', 'problems'] as PanelTab[]).map((t) => (
+            {(['memory', 'stack', 'cpp', 'problems', 'assistant'] as PanelTab[]).map((t) => (
               <button key={t} className={panel === t ? 'active' : ''} onClick={() => setPanel(t)}>
-                {t === 'memory' ? 'Memory' : t === 'stack' ? 'Call stack' : t === 'cpp' ? 'Preprocessor' : 'Problems'}
+                {t === 'memory' ? 'Memory' : t === 'stack' ? 'Call stack' : t === 'cpp' ? 'Preprocessor' : t === 'problems' ? 'Problems' : 'AI'}
               </button>
             ))}
           </div>
@@ -260,6 +274,7 @@ export function App() {
             {panel === 'stack' && <CallStackView snapshot={snapshot} />}
             {panel === 'cpp' && <PreprocessorView analysis={analysis} />}
             {panel === 'problems' && <ProblemsView analysis={analysis} />}
+            {panel === 'assistant' && <Chat onInsertCode={insertCode} />}
           </div>
         </div>
       </div>

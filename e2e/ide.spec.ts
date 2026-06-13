@@ -36,7 +36,7 @@ test('malloc example shows a heap block; UAF example is caught', async ({ page }
 });
 
 test('debugger steps and shows the call stack', async ({ page }) => {
-  await page.locator('.examples').selectOption('Structs & recursion');
+  await page.locator('.examples').selectOption('Factorial (recursion)');
   await page.getByTestId('debug').click();
   // Step a few times, then open the call-stack panel.
   await page.locator('button[title="Step into"]').click();
@@ -52,4 +52,22 @@ test('reports errors in the Problems panel', async ({ page }) => {
   await page.keyboard.type('int main(void){ return zzz; }');
   await page.locator('.panel-tabs button', { hasText: 'Problems' }).click();
   await expect(page.locator('.problems')).toContainText("'zzz' undeclared");
+});
+
+test('the offline AI assistant answers questions', async ({ page }) => {
+  await page.locator('.panel-tabs button', { hasText: 'AI' }).click();
+  await expect(page.getByTestId('chat')).toContainText('Offline assistant');
+  await page.getByTestId('chat-input').fill('how do pointers work?');
+  await page.getByTestId('chat-send').click();
+  await expect(page.locator('.msg.assistant')).toContainText(/address/i);
+});
+
+test('an assistant code block can be copied into a new file', async ({ page }) => {
+  await page.locator('.panel-tabs button', { hasText: 'AI' }).click();
+  await page.getByTestId('chat-input').fill('write a program to sort numbers');
+  await page.getByTestId('chat-send').click();
+  await expect(page.locator('.code-block')).toBeVisible();
+  await page.locator('.code-actions button', { hasText: 'copy to file' }).first().click();
+  // A new snippet file tab appears.
+  await expect(page.locator('.tab', { hasText: 'snippet' })).toBeVisible();
 });

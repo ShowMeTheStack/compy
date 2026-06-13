@@ -13,6 +13,7 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { StreamLanguage, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
+import { ghostText } from './ghost';
 
 export interface EditorDiagnostic {
   line: number;
@@ -31,6 +32,8 @@ interface EditorProps {
   diagnostics: EditorDiagnostic[];
   currentLine: number | null;
   onGotoDef: (line: number, col: number) => void;
+  /** Inline AI completion provider (empty string = no ghost). */
+  ghostProvider?: (before: string, after: string) => Promise<string>;
 }
 
 // -- a compact C stream tokenizer for highlighting ---------------------------
@@ -152,13 +155,14 @@ const editorTheme = EditorView.theme({
   '.cm-diag-error': { textDecoration: 'underline wavy #e51400' },
   '.cm-diag-warning': { textDecoration: 'underline wavy #cca700' },
   '.cm-current-line': { backgroundColor: 'rgba(255, 221, 87, 0.18)' },
+  '.cm-ghost': { color: '#6a6a6a', fontStyle: 'italic' },
 });
 
-export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnostics, currentLine, onGotoDef }: EditorProps) {
+export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnostics, currentLine, onGotoDef, ghostProvider }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const cbs = useRef({ onChange, onToggleBreakpoint, onGotoDef });
-  cbs.current = { onChange, onToggleBreakpoint, onGotoDef };
+  const cbs = useRef({ onChange, onToggleBreakpoint, onGotoDef, ghostProvider });
+  cbs.current = { onChange, onToggleBreakpoint, onGotoDef, ghostProvider };
 
   // Create the editor once.
   useEffect(() => {
@@ -203,6 +207,7 @@ export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnos
             return true;
           },
         }),
+        ghostText((before, after) => cbs.current.ghostProvider?.(before, after) ?? Promise.resolve('')),
         editorTheme,
         EditorView.theme({}, { dark: true }),
       ],
