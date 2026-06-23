@@ -12,7 +12,7 @@ describe.skipIf(!clang)('interpreter vs. clang (differential oracle)', () => {
       const r = differential(prog.source, prog.stdin ?? '');
       if (!r.match) {
         throw new Error(
-          `${prog.name}: ${r.reason}\n--- clang (exit ${r.clang.exit}) ---\n${r.clang.stdout}\n--- cide (exit ${r.cide.exit}) ---\n${r.cide.stdout}`,
+          `${prog.name}: ${r.reason}\n--- clang (exit ${r.clang.exit}) ---\n${r.clang.stdout}\n--- compy (exit ${r.compy.exit}) ---\n${r.compy.stdout}`,
         );
       }
       expect(r.match).toBe(true);

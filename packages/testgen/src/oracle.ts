@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { compileAndRun } from '@cide/libc';
+import { compileAndRun } from '@compy/libc';
 
 /**
  * The differential oracle: compile+run a C program with the real system
@@ -15,7 +15,7 @@ import { compileAndRun } from '@cide/libc';
 export interface OracleResult {
   match: boolean;
   clang: { stdout: string; exit: number };
-  cide: { stdout: string; exit: number };
+  compy: { stdout: string; exit: number };
   reason?: string;
 }
 
@@ -33,7 +33,7 @@ export function hasClang(): boolean {
 }
 
 export function runWithClang(source: string, stdin = '', argv: string[] = []): { stdout: string; exit: number } {
-  const dir = mkdtempSync(join(tmpdir(), 'cide-oracle-'));
+  const dir = mkdtempSync(join(tmpdir(), 'compy-oracle-'));
   const src = join(dir, 'prog.c');
   const bin = join(dir, 'prog');
   try {
@@ -54,7 +54,7 @@ export function runWithClang(source: string, stdin = '', argv: string[] = []): {
   }
 }
 
-export function runWithCide(source: string, stdin = '', argv: string[] = ['prog']): { stdout: string; exit: number } {
+export function runWithCompy(source: string, stdin = '', argv: string[] = ['prog']): { stdout: string; exit: number } {
   const r = compileAndRun({ files: { 'main.c': source }, stdin, argv });
   return { stdout: r.stdout, exit: r.result?.exitCode ?? -1 };
 }
@@ -62,12 +62,12 @@ export function runWithCide(source: string, stdin = '', argv: string[] = ['prog'
 /** Run a program on both engines and compare. */
 export function differential(source: string, stdin = '', argv: string[] = ['prog']): OracleResult {
   const clang = runWithClang(source, stdin, argv);
-  const cide = runWithCide(source, stdin, argv);
-  const match = clang.stdout === cide.stdout && (clang.exit & 0xff) === (cide.exit & 0xff);
+  const compy = runWithCompy(source, stdin, argv);
+  const match = clang.stdout === compy.stdout && (clang.exit & 0xff) === (compy.exit & 0xff);
   return {
     match,
     clang,
-    cide,
-    reason: match ? undefined : clang.stdout !== cide.stdout ? 'stdout differs' : 'exit code differs',
+    compy,
+    reason: match ? undefined : clang.stdout !== compy.stdout ? 'stdout differs' : 'exit code differs',
   };
 }

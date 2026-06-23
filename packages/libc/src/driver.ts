@@ -1,6 +1,6 @@
-import { preprocess, parse, analyze, Diagnostic, Token, SemaResult, TranslationUnit } from '@cide/cc';
-import { run, RunResult } from '@cide/vm';
-import { Vfs, Console, Syscalls, Memory } from '@cide/runtime';
+import { preprocess, parse, analyze, Diagnostic, Token, SemaResult, TranslationUnit } from '@compy/cc';
+import { run, RunResult } from '@compy/vm';
+import { Vfs, Console, Syscalls, Memory } from '@compy/runtime';
 import { createLibc } from './libc';
 import { standardHeaders, SYSTEM_INCLUDE_DIRS } from './headers';
 

@@ -134,7 +134,7 @@ export function App() {
   return (
     <div className="ide">
       <header className="toolbar">
-        <span className="brand">CIDE</span>
+        <span className="brand">Compy</span>
         <button className="btn run" onClick={doRun} data-testid="run">
           ▶ Run
         </button>

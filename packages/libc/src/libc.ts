@@ -1,5 +1,5 @@
-import * as T from '@cide/cc';
-import { Interp, Val, NativeFn, intVal, floatVal, ptrVal } from '@cide/vm';
+import * as T from '@compy/cc';
+import { Interp, Val, NativeFn, intVal, floatVal, ptrVal } from '@compy/vm';
 import { formatPrintf } from './format';
 
 /**

@@ -6,7 +6,7 @@ export interface ProjectState {
   active: string;
 }
 
-const KEY = 'cide.project.v1';
+const KEY = 'compy.project.v1';
 
 export function loadProject(): ProjectState {
   try {

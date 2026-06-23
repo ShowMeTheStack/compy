@@ -1,5 +1,5 @@
 {
-  "name": "cide",
+  "name": "compy",
   "private": true,
   "version": "0.1.0",
   "description": "A complete C89 (+VLA) teaching IDE running entirely in the browser: interpreter with a real process-memory model, memory & pointer visualizer, a valgrind-for-beginners UB sandbox, emulated syscalls + libc over a virtual filesystem, full debugger, and an in-browser AI assistant.",
@@ -8,9 +8,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @cide/ide",
-    "build": "npm run build -w @cide/ide",
-    "preview": "npm run preview -w @cide/ide",
+    "dev": "npm run dev -w @compy/ide",
+    "build": "npm run build -w @compy/ide",
+    "preview": "npm run preview -w @compy/ide",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

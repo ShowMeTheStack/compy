@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { preprocess, parse, analyze } from '@cide/cc';
+import { preprocess, parse, analyze } from '@compy/cc';
 import { run } from './interp';
 import { Debugger, StopEvent } from './debug';
-import { Console } from '@cide/runtime';
+import { Console } from '@compy/runtime';
 
 function compile(src: string) {
   const { tokens } = preprocess(src, { file: '/home/main.c' });

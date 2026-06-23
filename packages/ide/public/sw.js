@@ -1,5 +1,5 @@
 /*
- * CIDE model cache.
+ * Compy model cache.
  *  - Downloaded models: onnxruntime fetches the 260-370 MB weights itself, and
  *    Cache.put() rejects redirected responses (weights 302-redirect to the HF
  *    LFS CDN). We cache on the FIRST download by teeing the stream: one copy
@@ -7,9 +7,9 @@
  *    and byte progress is posted to the page. Later loads: served from cache.
  *  - Disk-uploaded models: served from cache under a same-origin path.
  */
-const CACHE = 'cide-ai-cache-v1';
+const CACHE = 'compy-ai-cache-v1';
 const MODEL_HOST = /^https:\/\/(huggingface\.co|[^/]*\.hf\.co|cdn-lfs[^/]*\.huggingface\.co)\//;
-const LOCAL_PREFIX = '/cide-local-model/';
+const LOCAL_PREFIX = '/compy-local-model/';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
@@ -22,7 +22,7 @@ async function handle(req, localOnly) {
   const cache = await caches.open(CACHE);
   const hit = await cache.match(req.url);
   if (hit) {
-    post({ type: 'cide-model', phase: 'cached' });
+    post({ type: 'compy-model', phase: 'cached' });
     return hit; // served from cache — no network, no redownload
   }
   if (localOnly) return new Response('not found', { status: 404 });
@@ -46,7 +46,7 @@ async function handle(req, localOnly) {
         const now = Date.now();
         if (isWeights && (now - last > 200 || loaded === total)) {
           last = now;
-          post({ type: 'cide-model', phase: 'download', loaded, total });
+          post({ type: 'compy-model', phase: 'download', loaded, total });
         }
         ctrl.enqueue(chunk);
       },

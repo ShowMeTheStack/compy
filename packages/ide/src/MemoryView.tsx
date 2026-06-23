@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Memory } from '@cide/runtime';
-import { VarView } from '@cide/vm';
+import { Memory } from '@compy/runtime';
+import { VarView } from '@compy/vm';
 import { SegView, HeapView } from './session';
 
 interface MemoryViewProps {

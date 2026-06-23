@@ -1,4 +1,4 @@
-import type { Interp, Val } from '@cide/vm';
+import type { Interp, Val } from '@compy/vm';
 
 /**
  * printf-family conversion. Takes the already-evaluated variadic argument

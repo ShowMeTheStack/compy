@@ -1,4 +1,4 @@
-import { FAULT_HELP, FaultKind } from '@cide/runtime';
+import { FAULT_HELP, FaultKind } from '@compy/runtime';
 import { EXAMPLES } from './examples';
 import { DOCS, DOC_LIST } from './docs';
 

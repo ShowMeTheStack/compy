@@ -82,5 +82,5 @@ export function setAiProgress(frac: number, detailText: string): void {
 
 // Test / integration hook: lets an injected engine drive the whole UI.
 if (typeof window !== 'undefined') {
-  (window as unknown as { __cideAI?: unknown }).__cideAI = { setEngine, setAiStatus, setAiProgress, getEngine };
+  (window as unknown as { __compyAI?: unknown }).__compyAI = { setEngine, setAiStatus, setAiProgress, getEngine };
 }

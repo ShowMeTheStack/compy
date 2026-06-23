@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { preprocess, parse, analyze } from '@cide/cc';
-import { run } from '@cide/vm';
-import { Console } from '@cide/runtime';
+import { preprocess, parse, analyze } from '@compy/cc';
+import { run } from '@compy/vm';
+import { Console } from '@compy/runtime';
 import { createLibc } from './libc';
 
 /** Compile and run a C program, returning its stdout and exit code. */

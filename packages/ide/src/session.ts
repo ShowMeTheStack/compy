@@ -1,7 +1,7 @@
-import { preprocess, parse, analyze, Diagnostic, SemaResult, TranslationUnit, PPEvent, DefLink } from '@cide/cc';
-import { run, Interp, Debugger, StopEvent, VarView } from '@cide/vm';
-import { Memory, Console, Syscalls, SegmentName, Segment } from '@cide/runtime';
-import { setupVfs, createLibc, standardHeaders, SYSTEM_INCLUDE_DIRS } from '@cide/libc';
+import { preprocess, parse, analyze, Diagnostic, SemaResult, TranslationUnit, PPEvent, DefLink } from '@compy/cc';
+import { run, Interp, Debugger, StopEvent, VarView } from '@compy/vm';
+import { Memory, Console, Syscalls, SegmentName, Segment } from '@compy/runtime';
+import { setupVfs, createLibc, standardHeaders, SYSTEM_INCLUDE_DIRS } from '@compy/libc';
 
 /**
  * The IDE's orchestration layer: compiles a project for editor features

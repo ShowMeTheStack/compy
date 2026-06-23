@@ -15,7 +15,7 @@ import type { ChatMessage } from './assistant';
 // jsdelivr dist builds leave bare imports unresolved.
 const TRANSFORMERS_CDN = 'https://esm.sh/@huggingface/transformers@3.5.1';
 export const MODEL_ID = 'HuggingFaceTB/SmolLM2-360M-Instruct';
-const ENABLED_KEY = 'cide-ai-enabled';
+const ENABLED_KEY = 'compy-ai-enabled';
 
 const SYSTEM =
   'You are a concise, friendly assistant for beginning C programmers using an ' +
@@ -126,7 +126,7 @@ interface Backend {
   dtype: string;
 }
 
-export const LOCAL_MODEL_PREFIX = '/cide-local-model/';
+export const LOCAL_MODEL_PREFIX = '/compy-local-model/';
 
 async function pickBackend(): Promise<Backend> {
   try {
@@ -168,7 +168,7 @@ function detectLocalDtype(files: Record<string, Blob>): string {
 }
 
 async function stageLocalModel(model: LocalModel): Promise<string> {
-  const cache = await caches.open('cide-ai-cache-v1');
+  const cache = await caches.open('compy-ai-cache-v1');
   const id = model.name.replace(/[^A-Za-z0-9._-]/g, '_') || 'local-model';
   for (const [rel, blob] of Object.entries(model.files)) {
     const path = rel.replace(/\\/g, '/').replace(/^\/+/, '');

@@ -1,7 +1,7 @@
-import * as A from '@cide/cc';
-import * as T from '@cide/cc';
-import { SemaResult, SymbolInfo } from '@cide/cc';
-import { Memory, Console, Syscalls, Vfs, CFault } from '@cide/runtime';
+import * as A from '@compy/cc';
+import * as T from '@compy/cc';
+import { SemaResult, SymbolInfo } from '@compy/cc';
+import { Memory, Console, Syscalls, Vfs, CFault } from '@compy/runtime';
 import { Val, intVal, floatVal, ptrVal, convert, narrow, addrOf, isTruthy, asInt } from './value';
 
 /**

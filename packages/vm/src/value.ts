@@ -1,4 +1,4 @@
-import * as T from '@cide/cc';
+import * as T from '@compy/cc';
 
 /**
  * A runtime C value: integers, enums, booleans, and pointers are held in `i`

@@ -1,5 +1,5 @@
 {
-  "name": "@cide/ide",
+  "name": "@compy/ide",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,10 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort"
   },
   "dependencies": {
-    "@cide/cc": "*",
-    "@cide/libc": "*",
-    "@cide/runtime": "*",
-    "@cide/vm": "*",
+    "@compy/cc": "*",
+    "@compy/libc": "*",
+    "@compy/runtime": "*",
+    "@compy/vm": "*",
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/language": "^6.12.4",
