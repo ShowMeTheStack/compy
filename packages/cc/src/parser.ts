@@ -187,7 +187,7 @@ class Parser {
 
     const first = this.parseDeclarator(false);
     // Function definition?  declarator is a function and body/K&R decls follow.
-    if (first.kind === 'FunctionDeclarator' && (this.isPunct('{') || this.startsDeclSpecifiers())) {
+    if (isFunctionDeclarator(first) && (this.isPunct('{') || this.startsDeclSpecifiers())) {
       const krDecls: A.Declaration[] = [];
       while (!this.isPunct('{') && !this.atEnd()) {
         krDecls.push(this.parseDeclarationRest(this.cur(), this.parseDeclSpecifiers()));
@@ -790,4 +790,19 @@ class Parser {
   private warnAt(span: Span, message: string, code?: string): void {
     this.diagnostics.push({ severity: 'warning', message, span, code });
   }
+}
+
+/**
+ * True when the declarator declares a function (not a pointer to one): the
+ * innermost suffix next to the identifier is a parameter list, e.g.
+ * `f(int)`, `*f(int)`, `**f(void)` — but not `(*fp)(int)`.
+ */
+function isFunctionDeclarator(d: A.Declarator): boolean {
+  let last: A.Declarator | null = null;
+  let cur: A.Declarator = d;
+  while (cur.kind !== 'IdentDeclarator') {
+    last = cur;
+    cur = cur.inner;
+  }
+  return last !== null && last.kind === 'FunctionDeclarator';
 }

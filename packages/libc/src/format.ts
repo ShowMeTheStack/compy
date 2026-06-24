@@ -1,4 +1,4 @@
-import type { Interp, Val } from '@compy/vm';
+import type { NativeHost, Val } from '@compy/vm';
 
 /**
  * printf-family conversion. Takes the already-evaluated variadic argument
@@ -7,7 +7,7 @@ import type { Interp, Val } from '@compy/vm';
  * 0), width, precision, length modifiers (h/hh/l/ll/L/z), and the conversions
  * d i u o x X c s f F e E g G p %.
  */
-export function formatPrintf(ctx: Interp, fmt: string, args: Val[], startIdx: number): string {
+export function formatPrintf(ctx: NativeHost, fmt: string, args: Val[], startIdx: number): string {
   let out = '';
   let ai = startIdx;
   const nextArg = (): Val | undefined => args[ai++];

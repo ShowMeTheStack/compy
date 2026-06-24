@@ -169,8 +169,9 @@ class Sema {
 
     this.push();
     // Bind parameters into the function scope.
-    if (fn.declarator.kind === 'FunctionDeclarator') {
-      for (const p of fn.declarator.params) {
+    const fdecl = A.functionDeclaratorOf(fn.declarator);
+    if (fdecl) {
+      for (const p of fdecl.params) {
         const pType = T.decay(this.buildParamType(p));
         const pName = p.declarator ? A.declaratorName(p.declarator) : undefined;
         if (pName) {
@@ -297,8 +298,10 @@ class Sema {
       let vla = false;
       if (d.size) {
         const n = this.evalConstInt(d.size);
-        if (n === null) vla = true;
-        else length = n;
+        if (n === null) {
+          vla = true;
+          this.expr(d.size); // a runtime expression: type it so it resolves identifiers
+        } else length = n;
       }
       return this.applyDeclarator(T.arrayOf(base, length, vla), d.inner);
     }
@@ -413,8 +416,9 @@ class Sema {
         return this.callType(e);
       case 'IndexExpr': {
         const base = T.decay(this.expr(e.base));
-        this.expr(e.index);
+        const index = T.decay(this.expr(e.index));
         if (base.kind === 'pointer') return base.to;
+        if (index.kind === 'pointer') return index.to; // `2[a]`
         this.error(e.span, 'subscripted value is not an array or pointer');
         return T.INT;
       }

@@ -351,3 +351,18 @@ export function declaratorName(d: Declarator | null): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * The parameter-list declarator of a function declarator chain (the suffix
+ * applied directly to the identifier), e.g. for `char *f(int)` the
+ * FunctionDeclarator inside the PointerDeclarator. Null for non-functions.
+ */
+export function functionDeclaratorOf(d: Declarator | null): FunctionDeclarator | null {
+  let last: Declarator | null = null;
+  let cur: Declarator | null = d;
+  while (cur && cur.kind !== 'IdentDeclarator') {
+    last = cur;
+    cur = cur.inner;
+  }
+  return last && last.kind === 'FunctionDeclarator' ? last : null;
+}

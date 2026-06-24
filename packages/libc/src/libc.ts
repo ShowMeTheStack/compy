@@ -1,5 +1,5 @@
 import * as T from '@compy/cc';
-import { Interp, Val, NativeFn, intVal, floatVal, ptrVal } from '@compy/vm';
+import { NativeHost, Val, NativeFn, intVal, floatVal, ptrVal } from '@compy/vm';
 import { formatPrintf } from './format';
 
 /**
@@ -28,8 +28,8 @@ export function createLibc(): Record<string, NativeFn> {
   let logicalClock = 0;
 
   /** FILE* struct: [0]=fd (int), [4]=eof/err flags (int). */
-  const fileFd = (ctx: Interp, fileAddr: number): number => (fileAddr < 16 ? fileAddr : ctx.mem.readI32(fileAddr));
-  const iob = (ctx: Interp, fd: number): number => {
+  const fileFd = (ctx: NativeHost, fileAddr: number): number => (fileAddr < 16 ? fileAddr : ctx.mem.readI32(fileAddr));
+  const iob = (ctx: NativeHost, fd: number): number => {
     let a = fileCache.get(fd);
     if (a === undefined) {
       a = ctx.mem.malloc(16);
@@ -39,7 +39,7 @@ export function createLibc(): Record<string, NativeFn> {
     }
     return a;
   };
-  const errnoCell = (ctx: Interp): number => {
+  const errnoCell = (ctx: NativeHost): number => {
     if (!errnoAddr) {
       errnoAddr = ctx.mem.malloc(4);
       ctx.mem.writeI32(errnoAddr, 0);
@@ -493,7 +493,7 @@ function ctypeFn(pred: (c: string) => boolean): NativeFn {
 }
 
 /** Drain all buffered console input into a string for scanf. */
-function drainConsole(ctx: Interp): { text: string; putBack: (rest: string) => void } {
+function drainConsole(ctx: NativeHost): { text: string; putBack: (rest: string) => void } {
   const bytes: number[] = [];
   for (;;) {
     const b = ctx.sys.read(0, 1);
@@ -509,7 +509,7 @@ function drainConsole(ctx: Interp): { text: string; putBack: (rest: string) => v
 }
 
 /** A minimal scanf: whitespace-skipping, %d %u %x %o %c %s %f/%e/%g, width. */
-function runScanf(ctx: Interp, input: string, fmt: string, args: Val[], startIdx: number, putBack: (rest: string) => void): number {
+function runScanf(ctx: NativeHost, input: string, fmt: string, args: Val[], startIdx: number, putBack: (rest: string) => void): number {
   let ip = 0;
   let ai = startIdx;
   let assigned = 0;
@@ -616,14 +616,14 @@ function mathFn(f: (x: number) => number): NativeFn {
   return (_ctx, a) => floatVal(T.DOUBLE, f(argFloat(a, 0)));
 }
 
-function cstr(ctx: Interp, addr: number): number[] {
+function cstr(ctx: NativeHost, addr: number): number[] {
   const s = ctx.readCString(addr);
   const out: number[] = [];
   for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i) & 0xff);
   return out;
 }
 
-function writeCString(ctx: Interp, addr: number, s: string): void {
+function writeCString(ctx: NativeHost, addr: number, s: string): void {
   for (let i = 0; i < s.length; i++) ctx.mem.writeU8(addr + i, s.charCodeAt(i) & 0xff);
   ctx.mem.writeU8(addr + s.length, 0);
 }

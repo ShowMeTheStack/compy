@@ -34,7 +34,26 @@ type Flow =
 
 const NORMAL: Flow = { k: 'normal' };
 
-export type NativeFn = (ctx: Interp, args: Val[]) => Val | null;
+/**
+ * What a native (host-implemented) library function may use. The tree-walking
+ * interpreter, the IR interpreter, and the machine simulator all implement
+ * this, so one libc serves every execution engine.
+ */
+export interface NativeHost {
+  readonly mem: Memory;
+  readonly con: Console;
+  readonly sys: Syscalls;
+  readonly vfs: Vfs;
+  readCString(addr: number): string;
+  internCString(s: string): number;
+  malloc(n: number): number;
+  exit(code: number): never;
+  registerAtexit(addr: number): void;
+  callFunctionPointer(addr: number, args: Val[]): Val | null;
+  callDepth(): number;
+}
+
+export type NativeFn = (ctx: NativeHost, args: Val[]) => Val | null;
 
 /** Debugger hook: called before each executable statement/declaration. */
 export interface DebugController {
@@ -86,7 +105,7 @@ export function run(unit: A.TranslationUnit, sema: SemaResult, opts: RunOptions 
   return new Interp(unit, sema, opts).run();
 }
 
-export class Interp {
+export class Interp implements NativeHost {
   readonly mem: Memory;
   readonly con: Console;
   readonly sys: Syscalls;
@@ -205,9 +224,9 @@ export class Interp {
           continue;
         }
       }
-      const size = Math.max(1, T.sizeof(sym.type));
-      // Zero-initialized globals go to BSS; initialized ones to DATA.
       const initDecl = this.findInitDecl(sym);
+      const size = Math.max(1, T.sizeof(this.effectiveType(sym.type, initDecl?.init ?? null)));
+      // Zero-initialized globals go to BSS; initialized ones to DATA.
       const addr = initDecl?.init ? this.mem.allocData(new Uint8Array(size)) : this.mem.allocBss(size);
       this.globalAddr.set(sym.id, addr);
       if (sym.linkage === 'external') external.set(sym.name, addr);
@@ -222,7 +241,7 @@ export class Interp {
         if (!sym || sym.kind !== 'var') continue;
         const addr = this.globalAddr.get(sym.id);
         if (addr === undefined) continue;
-        if (init.init) this.initObject(addr, sym.type, init.init);
+        if (init.init) this.initObject(addr, this.effectiveType(sym.type, init.init), init.init);
       }
     }
   }
@@ -235,7 +254,8 @@ export class Interp {
   }
 
   private mainArgs(def: A.FunctionDef): Val[] {
-    if (def.declarator.kind !== 'FunctionDeclarator' || def.declarator.params.length === 0) return [];
+    const fdecl = A.functionDeclaratorOf(def.declarator);
+    if (!fdecl || fdecl.params.length === 0) return [];
     // int main(int argc, char **argv)
     const argc = this.argv.length;
     const ptrs: number[] = this.argv.map((s) => this.internCString(s));
@@ -254,8 +274,9 @@ export class Interp {
     this.locals.push(frame);
     this.callStack.push({ name: A.declaratorName(def.declarator) ?? '<fn>', line: def.declarator.span.start.line });
     try {
-      if (def.declarator.kind === 'FunctionDeclarator') {
-        const params = def.declarator.params.filter((p) => p.declarator || p.specifiers.typeSpecs.length);
+      const fdecl = A.functionDeclaratorOf(def.declarator);
+      if (fdecl) {
+        const params = fdecl.params.filter((p) => p.declarator || p.specifiers.typeSpecs.length);
         params.forEach((p, i) => {
           const sym = this.sema.symOf.get(p);
           if (!sym) return;
@@ -330,16 +351,29 @@ export class Interp {
         }
         continue;
       }
-      const type = this.effectiveType(sym.type, init.init);
+      const type = this.effectiveType(sym.type, init.init, init.declarator);
       const addr = this.mem.pushStack(Math.max(1, T.sizeof(type)));
       this.frame().set(sym.id, addr);
-      if (init.init) this.initObject(addr, type, init.init);
+      if (init.init) {
+        // C: members not named in a brace list are zero-initialized.
+        if (init.init.kind === 'ListInit') this.mem.fill(addr, 0, Math.max(1, T.sizeof(type)));
+        this.initObject(addr, type, init.init);
+      }
     }
     return NORMAL;
   }
 
   /** Resolve an unspecified array bound (`int a[]={...}`, `char s[]="hi"`). */
-  private effectiveType(type: T.CType, init: A.Initializer | null): T.CType {
+  private effectiveType(type: T.CType, init: A.Initializer | null, declarator?: A.Declarator): T.CType {
+    if (type.kind === 'array' && type.vla && declarator) {
+      // Variable-length array: evaluate the bound now.
+      let cur: A.Declarator | null = declarator;
+      while (cur && cur.kind !== 'ArrayDeclarator') cur = cur.kind === 'IdentDeclarator' ? null : cur.inner;
+      if (cur && cur.kind === 'ArrayDeclarator' && cur.size) {
+        const n = Number(asInt(this.eval(cur.size)));
+        return T.arrayOf(type.of, Math.max(0, n));
+      }
+    }
     if (type.kind === 'array' && type.length === null && init) {
       if (init.kind === 'ListInit') return T.arrayOf(type.of, init.items.length);
       if (init.kind === 'ExprInit' && init.expr.kind === 'StringLit') {
@@ -554,8 +588,10 @@ export class Interp {
         }
         break;
       case 'IndexExpr': {
-        const base = this.eval(e.base);
-        const idx = asInt(this.eval(e.index));
+        let base = this.eval(e.base);
+        let idxV = this.eval(e.index);
+        if (T.decay(base.type).kind !== 'pointer' && T.decay(idxV.type).kind === 'pointer') [base, idxV] = [idxV, base]; // `2[a]`
+        const idx = asInt(idxV);
         const bt = T.decay(base.type);
         const elem = bt.kind === 'pointer' ? bt.to : T.INT;
         return { addr: addrOf(base) + Number(idx) * Math.max(1, T.sizeof(elem)), type: elem };
@@ -567,6 +603,11 @@ export class Interp {
           const p = this.eval(e.base);
           baseAddr = addrOf(p);
           structType = this.pointeeType(p.type);
+        } else if (e.base.kind === 'CallExpr' || e.base.kind === 'AssignExpr' || e.base.kind === 'CondExpr' || e.base.kind === 'CommaExpr') {
+          // A struct rvalue (e.g. `mk(1,2).y`): the value carries its address.
+          const v = this.eval(e.base);
+          baseAddr = addrOf(v);
+          structType = v.type;
         } else {
           const lv = this.lvalue(e.base);
           baseAddr = lv.addr;
