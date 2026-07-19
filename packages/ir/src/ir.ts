@@ -52,6 +52,8 @@ export interface Sig {
   ret: IrType;
   params: IrType[];
   variadic: boolean;
+  /** How many leading params are covered by a prototype (ABI: floats beyond this travel in integer registers). */
+  fixed?: number;
 }
 
 interface Base {

@@ -1372,7 +1372,7 @@ class Lowerer {
         params.push(p.v.type);
       }
     });
-    const sig: Sig = { ret: sretTmp ? 'void' : irTypeOf(retC), params, variadic: ftype?.variadic ?? !proto };
+    const sig: Sig = { ret: sretTmp ? 'void' : irTypeOf(retC), params, variadic: ftype?.variadic ?? !proto, fixed: proto ? proto.length + (sretTmp ? 1 : 0) : 0 };
     if (sig.ret === 'void') {
       this.emit({ op: 'call', callee, args, sig });
       return sretTmp ?? constInt('i32', 0);
