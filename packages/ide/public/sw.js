@@ -55,10 +55,35 @@ async function handle(req, localOnly) {
   return new Response(metered, { status: 200, headers });
 }
 
+/*
+ * Cross-origin isolation on a static host. GitHub Pages cannot send
+ * COOP/COEP headers, yet WebGPU and multithreaded WASM (used by the in-browser
+ * AI model) require them. The service worker adds the headers to every
+ * same-origin response it serves; the page reloads once after the worker
+ * takes control so the document itself gets them.
+ */
+const COI_HEADERS = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'credentialless',
+};
+
+async function withIsolation(req) {
+  const res = await fetch(req);
+  if (res.status === 0 || res.type === 'opaque') return res;
+  const headers = new Headers(res.headers);
+  for (const [k, v] of Object.entries(COI_HEADERS)) headers.set(k, v);
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const isLocal = req.url.startsWith(self.location.origin + LOCAL_PREFIX);
-  if (!MODEL_HOST.test(req.url) && !isLocal) return;
-  event.respondWith(handle(req, isLocal));
+  if (MODEL_HOST.test(req.url) || isLocal) {
+    event.respondWith(handle(req, isLocal));
+    return;
+  }
+  if (req.url.startsWith(self.location.origin) && (req.mode === 'navigate' || req.destination === 'script' || req.destination === 'style' || req.destination === 'worker')) {
+    event.respondWith(withIsolation(req));
+  }
 });

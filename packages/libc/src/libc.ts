@@ -26,6 +26,18 @@ export function createLibc(): Record<string, NativeFn> {
   const fileCache = new Map<number, number>(); // fd -> FILE* struct address
   let errnoAddr = 0;
   let logicalClock = 0;
+  let strtokState = 0;
+  let tmAddr = 0;
+
+  const fillTm = (ctx: NativeHost, timePtr: number): number => {
+    if (!tmAddr) tmAddr = ctx.mem.malloc(9 * 4);
+    const t = timePtr ? ctx.mem.readI32(timePtr) : 0;
+    const d = new Date(t * 1000);
+    const start = Date.UTC(d.getUTCFullYear(), 0, 1);
+    const fields = [d.getUTCSeconds(), d.getUTCMinutes(), d.getUTCHours(), d.getUTCDate(), d.getUTCMonth(), d.getUTCFullYear() - 1900, d.getUTCDay(), Math.floor((d.getTime() - start) / 86400000), 0];
+    fields.forEach((v, k) => ctx.mem.writeI32(tmAddr + 4 * k, v));
+    return tmAddr;
+  };
 
   /** FILE* struct: [0]=fd (int), [4]=eof/err flags (int). */
   const fileFd = (ctx: NativeHost, fileAddr: number): number => (fileAddr < 16 ? fileAddr : ctx.mem.readI32(fileAddr));
@@ -479,6 +491,202 @@ export function createLibc(): Record<string, NativeFn> {
     clock() {
       return intVal(T.LONG, BigInt(++logicalClock));
     },
+
+    // -- stdlib / string additions (M6 leftovers) ---------------------------
+    strtol: (ctx, a) => strtoX(ctx, a, true),
+    strtoul: (ctx, a) => strtoX(ctx, a, false),
+    strtod(ctx, a) {
+      const s = ctx.readCString(argInt(a, 0));
+      const m = /^\s*[+-]?(\d+\.?\d*([eE][+-]?\d+)?|\.\d+([eE][+-]?\d+)?|inf(inity)?|nan)/i.exec(s);
+      const end = argInt(a, 1);
+      const consumed = m ? m[0].length : 0;
+      if (end) ctx.mem.writeU32(end, argInt(a, 0) + consumed);
+      return floatVal(T.DOUBLE, m ? parseFloat(m[0]) || (/inf/i.test(m[0]) ? (m[0].trim().startsWith('-') ? -Infinity : Infinity) : 0) : 0);
+    },
+    strtok(ctx, a) {
+      let s = argInt(a, 0);
+      const delims = cstr(ctx, argInt(a, 1));
+      if (s === 0) s = strtokState;
+      if (s === 0) return ptrVal(CHARP, 0);
+      while (ctx.mem.readU8(s) !== 0 && delims.includes(ctx.mem.readU8(s))) s++;
+      if (ctx.mem.readU8(s) === 0) {
+        strtokState = 0;
+        return ptrVal(CHARP, 0);
+      }
+      const start = s;
+      while (ctx.mem.readU8(s) !== 0 && !delims.includes(ctx.mem.readU8(s))) s++;
+      if (ctx.mem.readU8(s) !== 0) {
+        ctx.mem.writeU8(s, 0);
+        strtokState = s + 1;
+      } else strtokState = 0;
+      return ptrVal(CHARP, start);
+    },
+    strrchr(ctx, a) {
+      const base = argInt(a, 0);
+      const bytes = cstr(ctx, base);
+      const c = argInt(a, 1) & 0xff;
+      if (c === 0) return ptrVal(CHARP, base + bytes.length);
+      const k = bytes.lastIndexOf(c);
+      return ptrVal(CHARP, k < 0 ? 0 : base + k);
+    },
+    strncat(ctx, a) {
+      const dst = argInt(a, 0);
+      const src = cstr(ctx, argInt(a, 1)).slice(0, argInt(a, 2));
+      const len = cstr(ctx, dst).length;
+      for (let k = 0; k < src.length; k++) ctx.mem.writeU8(dst + len + k, src[k]!);
+      ctx.mem.writeU8(dst + len + src.length, 0);
+      return ptrVal(CHARP, dst);
+    },
+    strspn(ctx, a) {
+      const s = cstr(ctx, argInt(a, 0));
+      const set = cstr(ctx, argInt(a, 1));
+      let n = 0;
+      while (n < s.length && set.includes(s[n]!)) n++;
+      return intVal(T.ULONG, BigInt(n));
+    },
+    strcspn(ctx, a) {
+      const s = cstr(ctx, argInt(a, 0));
+      const set = cstr(ctx, argInt(a, 1));
+      let n = 0;
+      while (n < s.length && !set.includes(s[n]!)) n++;
+      return intVal(T.ULONG, BigInt(n));
+    },
+    strpbrk(ctx, a) {
+      const base = argInt(a, 0);
+      const s = cstr(ctx, base);
+      const set = cstr(ctx, argInt(a, 1));
+      for (let k = 0; k < s.length; k++) if (set.includes(s[k]!)) return ptrVal(CHARP, base + k);
+      return ptrVal(CHARP, 0);
+    },
+    strdup(ctx, a) {
+      const s = cstr(ctx, argInt(a, 0));
+      const p = ctx.mem.malloc(s.length + 1);
+      if (p) {
+        for (let k = 0; k < s.length; k++) ctx.mem.writeU8(p + k, s[k]!);
+        ctx.mem.writeU8(p + s.length, 0);
+      }
+      return ptrVal(CHARP, p);
+    },
+    memchr(ctx, a) {
+      const base = argInt(a, 0);
+      const c = argInt(a, 1) & 0xff;
+      const n = argInt(a, 2);
+      const bytes = ctx.mem.inspect(base, n).bytes;
+      const k = bytes.indexOf(c);
+      return ptrVal(VOIDP, k < 0 ? 0 : base + k);
+    },
+    bsearch(ctx, a) {
+      const key = argInt(a, 0);
+      const base = argInt(a, 1);
+      const n = argInt(a, 2);
+      const size = argInt(a, 3);
+      const cmp = argInt(a, 4);
+      let lo = 0;
+      let hi = n - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const elem = base + mid * size;
+        const r = ctx.callFunctionPointer(cmp, [ptrVal(VOIDP, key), ptrVal(VOIDP, elem)]);
+        const c = r ? Number(r.i) : 0;
+        if (c === 0) return ptrVal(VOIDP, elem);
+        if (c < 0) hi = mid - 1;
+        else lo = mid + 1;
+      }
+      return ptrVal(VOIDP, 0);
+    },
+    div: (ctx, a) => divT(ctx, a),
+    ldiv: (ctx, a) => divT(ctx, a),
+    getenv(_ctx) {
+      return ptrVal(CHARP, 0);
+    },
+    system(ctx, a) {
+      ctx.con.write('err', `system("${ctx.readCString(argInt(a, 0))}"): no shell in the sandbox\n`);
+      return intVal(T.INT, -1n);
+    },
+    rename(ctx, a) {
+      const from = ctx.readCString(argInt(a, 0));
+      const to = ctx.readCString(argInt(a, 1));
+      try {
+        ctx.vfs.rename(from.startsWith('/') ? from : '/home/' + from, to.startsWith('/') ? to : '/home/' + to);
+        return intVal(T.INT, 0n);
+      } catch {
+        return intVal(T.INT, -1n);
+      }
+    },
+    ungetc(ctx, a) {
+      const c = argInt(a, 0);
+      const fd = fileFd(ctx, argInt(a, 1));
+      if (fd === 0) ctx.con.unread(String.fromCharCode(c & 0xff));
+      return intVal(T.INT, BigInt(c & 0xff));
+    },
+
+    // -- math additions ------------------------------------------------------
+    asin: mathFn(Math.asin),
+    acos: mathFn(Math.acos),
+    atan: mathFn(Math.atan),
+    atan2: (_ctx, a) => floatVal(T.DOUBLE, Math.atan2(argFloat(a, 0), argFloat(a, 1))),
+    sinh: mathFn(Math.sinh),
+    cosh: mathFn(Math.cosh),
+    tanh: mathFn(Math.tanh),
+    ldexp: (_ctx, a) => floatVal(T.DOUBLE, argFloat(a, 0) * Math.pow(2, argInt(a, 1))),
+    frexp(ctx, a) {
+      const x = argFloat(a, 0);
+      const out = argInt(a, 1);
+      if (x === 0 || !Number.isFinite(x)) {
+        if (out) ctx.mem.writeI32(out, 0);
+        return floatVal(T.DOUBLE, x);
+      }
+      const e = Math.floor(Math.log2(Math.abs(x))) + 1;
+      if (out) ctx.mem.writeI32(out, e);
+      return floatVal(T.DOUBLE, x / Math.pow(2, e));
+    },
+    modf(ctx, a) {
+      const x = argFloat(a, 0);
+      const ip = Math.trunc(x);
+      const out = argInt(a, 1);
+      if (out) ctx.mem.writeF64(out, ip);
+      return floatVal(T.DOUBLE, x - ip);
+    },
+
+    // -- time additions (a deterministic calendar: the logical clock is seconds since 1970) --
+    difftime: (_ctx, a) => floatVal(T.DOUBLE, argFloat(a, 0) - argFloat(a, 1)),
+    gmtime: (ctx, a) => ptrVal(VOIDP, fillTm(ctx, argInt(a, 0))),
+    localtime: (ctx, a) => ptrVal(VOIDP, fillTm(ctx, argInt(a, 0))),
+    mktime(ctx, a) {
+      const p = argInt(a, 0);
+      const f = (k: number) => ctx.mem.readI32(p + 4 * k);
+      const t = Date.UTC(f(5) + 1900, f(4), f(3), f(2), f(1), f(0)) / 1000;
+      return intVal(T.LONG, BigInt(Math.trunc(t)));
+    },
+    ctime(ctx, a) {
+      const t = ctx.mem.readI32(argInt(a, 0));
+      const s = new Date(t * 1000).toUTCString().replace(/,/, '').replace(/ GMT$/, '') + '\n';
+      return ptrVal(CHARP, ctx.internCString(s));
+    },
+    strftime(ctx, a) {
+      const dst = argInt(a, 0);
+      const max = argInt(a, 1);
+      const fmt = ctx.readCString(argInt(a, 2));
+      const p = argInt(a, 3);
+      const f = (k: number) => ctx.mem.readI32(p + 4 * k);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const out = fmt.replace(/%([YmdHMSjy%])/g, (_m, c: string) => {
+        switch (c) {
+          case 'Y': return String(f(5) + 1900);
+          case 'y': return pad((f(5) + 1900) % 100);
+          case 'm': return pad(f(4) + 1);
+          case 'd': return pad(f(3));
+          case 'H': return pad(f(2));
+          case 'M': return pad(f(1));
+          case 'S': return pad(f(0));
+          case 'j': return String(f(7) + 1).padStart(3, '0');
+          default: return '%';
+        }
+      });
+      if (out.length + 1 > max) return intVal(T.ULONG, 0n);
+      writeCString(ctx, dst, out);
+      return intVal(T.ULONG, BigInt(out.length));
+    },
   };
 
   return lib;
@@ -636,6 +844,54 @@ function cmpBytes(a: number[], b: number[]): number {
     if (x !== y) return x < y ? -1 : 1;
   }
   return 0;
+}
+
+/**
+ * div()/ldiv() return a struct. The IR and machine engines pass a hidden
+ * result pointer first (3 args); the tree-walker expects a struct value, i.e.
+ * the address of a freshly allocated result (2 args).
+ */
+function divT(ctx: NativeHost, a: Val[]): Val | null {
+  const sret = a.length === 3 ? argInt(a, 0) : ctx.mem.malloc(8);
+  const x = argInt(a, a.length === 3 ? 1 : 0);
+  const y = argInt(a, a.length === 3 ? 2 : 1);
+  ctx.mem.writeI32(sret, y === 0 ? 0 : Math.trunc(x / y));
+  ctx.mem.writeI32(sret + 4, y === 0 ? 0 : x % y);
+  if (a.length === 3) return null;
+  const divType: T.CType = { kind: 'struct', tag: 'div_t', fields: [{ name: 'quot', type: T.INT, offset: 0 }, { name: 'rem', type: T.INT, offset: 4 }], size: 8, align: 4, complete: true, id: -1 };
+  return { type: divType, i: BigInt(sret), f: 0 };
+}
+
+function strtoX(ctx: NativeHost, a: Val[], signed: boolean): Val {
+  const base = argInt(a, 2);
+  const text = ctx.readCString(argInt(a, 0));
+  let i = 0;
+  while (i < text.length && /\s/.test(text[i]!)) i++;
+  let neg = false;
+  if (text[i] === '+' || text[i] === '-') neg = text[i++] === '-';
+  let b = base;
+  if ((b === 0 || b === 16) && text[i] === '0' && (text[i + 1] === 'x' || text[i + 1] === 'X')) {
+    b = 16;
+    i += 2;
+  } else if (b === 0) b = text[i] === '0' ? 8 : 10;
+  let v = 0n;
+  let digits = 0;
+  for (; i < text.length; i++) {
+    const c = text[i]!.toLowerCase();
+    const d = c >= '0' && c <= '9' ? c.charCodeAt(0) - 48 : c >= 'a' && c <= 'z' ? c.charCodeAt(0) - 87 : 99;
+    if (d >= b) break;
+    v = v * BigInt(b) + BigInt(d);
+    digits++;
+  }
+  const end = argInt(a, 1);
+  if (end) ctx.mem.writeU32(end, argInt(a, 0) + (digits ? i : 0));
+  if (neg) v = -v;
+  if (signed) {
+    if (v > 2147483647n) v = 2147483647n;
+    if (v < -2147483648n) v = -2147483648n;
+    return intVal(T.LONG, v);
+  }
+  return intVal(T.ULONG, BigInt.asUintN(32, v));
 }
 
 function parseCInt(s: string): number {

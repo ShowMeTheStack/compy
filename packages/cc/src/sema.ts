@@ -45,6 +45,8 @@ export interface SemaResult {
   /** Go-to-definition links (identifier and typedef-name uses). */
   defs: DefLink[];
   globals: SymbolInfo[];
+  /** The type each type-name (cast / sizeof(type)) denotes. */
+  typeOfName: Map<A.TypeName, T.CType>;
 }
 
 interface Scope {
@@ -64,6 +66,7 @@ class Sema {
   private readonly symOf = new Map<A.InitDeclarator | A.ParamDecl | A.FunctionDef, SymbolInfo>();
   private readonly defs: DefLink[] = [];
   private readonly globals: SymbolInfo[] = [];
+  private readonly typeOfName = new Map<A.TypeName, T.CType>();
   private scope: Scope = { parent: null, ordinary: new Map(), tags: new Map() };
   private nextSymId = 1;
   private nextTagId = 1;
@@ -81,6 +84,7 @@ class Sema {
       symOf: this.symOf,
       defs: this.defs,
       globals: this.globals,
+      typeOfName: this.typeOfName,
     };
   }
 
@@ -554,8 +558,12 @@ class Sema {
   }
 
   private typeName(tn: A.TypeName): T.CType {
+    const cached = this.typeOfName.get(tn);
+    if (cached) return cached;
     const base = this.baseType(tn.specifiers);
-    return this.applyDeclarator(base, tn.declarator);
+    const t = this.applyDeclarator(base, tn.declarator);
+    this.typeOfName.set(tn, t);
+    return t;
   }
 
   private checkInit(init: A.Initializer, _target: T.CType): void {

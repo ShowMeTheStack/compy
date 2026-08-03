@@ -928,19 +928,7 @@ class Lowerer {
   }
 
   private typeOfTypeName(tn: A.TypeName): T.CType {
-    // sema typed the cast expression; for sizeof(type) we re-derive via a cast's result when possible.
-    // Fallback: build from the specifiers (basic types / typedefs via sema are not reachable here),
-    // so we look for a cached type on any CastExpr/SizeofType using this TypeName.
-    for (const [expr, t] of this.sema.typeOf) {
-      if (expr.kind === 'CastExpr' && expr.type === tn) return t;
-    }
-    for (const [expr] of this.sema.typeOf) {
-      if (expr.kind === 'SizeofType' && expr.type === tn) {
-        // sema evaluates sizeof(type) to ULONG; recover the type by re-walking the specifiers.
-        break;
-      }
-    }
-    return typeFromTypeName(tn, this.sema);
+    return this.sema.typeOfName.get(tn) ?? typeFromTypeName(tn, this.sema);
   }
 
   /** Convert an IR value of C type `from` to C type `to`, emitting casts as needed. */

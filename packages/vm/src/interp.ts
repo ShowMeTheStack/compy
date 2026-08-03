@@ -549,7 +549,7 @@ export class Interp implements NativeHost {
       case 'SizeofExpr':
         return intVal(T.ULONG, BigInt(T.sizeof(this.semaType(e.operand))));
       case 'SizeofType':
-        return intVal(T.ULONG, BigInt(T.sizeof(this.exprType(e))));
+        return intVal(T.ULONG, BigInt(T.sizeof(this.sema.typeOfName.get(e.type) ?? T.INT)));
     }
   }
 

@@ -24,6 +24,13 @@ export interface EditorDiagnostic {
   message: string;
 }
 
+export interface EditorRange {
+  line: number;
+  col: number;
+  endLine: number;
+  endCol: number;
+}
+
 interface EditorProps {
   doc: string;
   onChange: (doc: string) => void;
@@ -31,6 +38,8 @@ interface EditorProps {
   onToggleBreakpoint: (line: number) => void;
   diagnostics: EditorDiagnostic[];
   currentLine: number | null;
+  /** A source range to spotlight (hovering a token / AST node / IR instruction). */
+  highlight: EditorRange | null;
   onGotoDef: (line: number, col: number) => void;
   /** Inline AI completion provider (empty string = no ghost). */
   ghostProvider?: (before: string, after: string) => Promise<string>;
@@ -147,6 +156,26 @@ const currentLineField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+const setHighlightEffect = StateEffect.define<EditorRange | null>();
+const highlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    for (const e of tr.effects) {
+      if (e.is(setHighlightEffect)) {
+        const r = e.value;
+        if (!r || r.line < 1 || r.line > tr.state.doc.lines) return Decoration.none;
+        const from = Math.min(tr.state.doc.line(r.line).from + r.col - 1, tr.state.doc.line(r.line).to);
+        const endLine = Math.min(Math.max(r.endLine, r.line), tr.state.doc.lines);
+        const to = Math.min(tr.state.doc.line(endLine).from + r.endCol, tr.state.doc.line(endLine).to);
+        if (to <= from) return Decoration.set([Decoration.line({ class: 'cm-phase-line' }).range(tr.state.doc.line(r.line).from)]);
+        return Decoration.set([Decoration.mark({ class: 'cm-phase-highlight' }).range(from, to)]);
+      }
+    }
+    return value.map(tr.changes);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
 const editorTheme = EditorView.theme({
   '&': { height: '100%', fontSize: '13px' },
   '.cm-scroller': { fontFamily: 'ui-monospace, Menlo, Consolas, monospace' },
@@ -155,10 +184,12 @@ const editorTheme = EditorView.theme({
   '.cm-diag-error': { textDecoration: 'underline wavy #e51400' },
   '.cm-diag-warning': { textDecoration: 'underline wavy #cca700' },
   '.cm-current-line': { backgroundColor: 'rgba(255, 221, 87, 0.18)' },
+  '.cm-phase-highlight': { backgroundColor: 'rgba(78, 201, 176, 0.35)', outline: '1px solid rgba(78, 201, 176, 0.8)', borderRadius: '2px' },
+  '.cm-phase-line': { backgroundColor: 'rgba(78, 201, 176, 0.15)' },
   '.cm-ghost': { color: '#6a6a6a', fontStyle: 'italic' },
 });
 
-export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnostics, currentLine, onGotoDef, ghostProvider }: EditorProps) {
+export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnostics, currentLine, highlight, onGotoDef, ghostProvider }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const cbs = useRef({ onChange, onToggleBreakpoint, onGotoDef, ghostProvider });
@@ -179,6 +210,7 @@ export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnos
         breakpointField,
         diagnosticsField,
         currentLineField,
+        highlightField,
         gutter({
           class: 'cm-breakpoint-gutter',
           lineMarker: (v, block) => {
@@ -233,8 +265,21 @@ export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnos
     view.current?.dispatch({ effects: setDiagnosticsEffect.of(diagnostics) });
   }, [diagnostics]);
   useEffect(() => {
-    view.current?.dispatch({ effects: setCurrentLineEffect.of(currentLine) });
+    const v = view.current;
+    if (!v) return;
+    v.dispatch({ effects: setCurrentLineEffect.of(currentLine) });
+    if (currentLine !== null && currentLine >= 1 && currentLine <= v.state.doc.lines) {
+      v.dispatch({ effects: EditorView.scrollIntoView(v.state.doc.line(currentLine).from, { y: 'center' }) });
+    }
   }, [currentLine]);
+  useEffect(() => {
+    const v = view.current;
+    if (!v) return;
+    v.dispatch({ effects: setHighlightEffect.of(highlight) });
+    if (highlight && highlight.line >= 1 && highlight.line <= v.state.doc.lines) {
+      v.dispatch({ effects: EditorView.scrollIntoView(v.state.doc.line(highlight.line).from, { y: 'nearest' }) });
+    }
+  }, [highlight]);
 
   return <div className="editor-host" ref={host} data-testid="editor" />;
 }

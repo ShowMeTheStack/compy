@@ -1,3 +1,5 @@
+import { LESSONS } from './lessons';
+
 /** Runnable C teaching programs shown in the IDE and retrieved by the assistant. */
 export interface Example {
   name: string;
@@ -9,6 +11,12 @@ export interface Example {
 /** Shorthand for a single-file example. */
 function one(name: string, category: string, description: string, code: string): Example {
   return { name, category, description, files: { 'main.c': code } };
+}
+
+/** A single-file example whose program is a lesson's example (keeps the two in sync). */
+function fromLesson(name: string, category: string, description: string, lessonId: string): Example {
+  const code = LESSONS.find((l) => l.id === lessonId)?.example ?? `/* missing lesson: ${lessonId} */\nint main(void) { return 0; }\n`;
+  return one(name, category, description, code);
 }
 
 export const EXAMPLES: Example[] = [
@@ -250,6 +258,7 @@ int main(void) {
   one('Count vowels', 'Strings', 'Classify characters with ctype.h.',
 `#include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 
 int main(void) {
     const char *s = "The quick brown fox";
@@ -368,6 +377,38 @@ int cube(int n) { return n * n * n; }
 `,
     },
   },
+  // ───────────── Compiler-course examples (one per lesson, see lessons.ts) ─────────────
+  fromLesson('Token kinds', 'Compiler: lexing', 'Keywords, identifiers, constants, strings and punctuators — open the Tokens panel.', 'what-a-lexer-does'),
+  fromLesson('Line splicing & comments', 'Compiler: lexing', 'Backslash-newline and comments vanish before any token exists (translation phases 1–3).', 'translation-phases'),
+  fromLesson('Maximal munch: a+++b', 'Compiler: lexing', 'The lexer always takes the longest token, so a+++b is a++ + b.', 'maximal-munch'),
+  fromLesson('Literals & regular expressions', 'Compiler: lexing', 'Hex, octal, decimal, floating and character constants — each a regular language.', 'regular-languages-and-tokens'),
+  fromLesson('Typedef names vs keywords', 'Compiler: lexing', 'Keywords are looked up in a table; typedef names need the parser\'s symbol table.', 'keywords-are-identifiers'),
+  fromLesson('Stringize & token paste', 'Compiler: preprocessing', 'Object-like and function-like macros, # and ##, __LINE__ — open the Preprocessor lens.', 'macros-and-expansion'),
+  fromLesson('SQ(x) macro bug', 'Compiler: preprocessing', 'Why #define SQ(x) x*x gives SQ(1+2) = 5 and how parentheses fix it.', 'sq-macro-bug'),
+  fromLesson('Conditional compilation', 'Compiler: preprocessing', '#if / #elif / #ifdef and an include guard, all in one file.', 'conditional-compilation'),
+  fromLesson('Recursive descent in C', 'Compiler: parsing', 'A three-rule expression grammar implemented as three mutually recursive C functions.', 'grammars-and-recursive-descent'),
+  fromLesson('Precedence & associativity', 'Compiler: parsing', 'Surprising groupings: 1 << 2 + 1, 6 & 3 == 3, chained assignment — check the AST.', 'precedence-climbing'),
+  fromLesson('Declarators: spiral rule', 'Compiler: parsing', 'int *ap[3], int (*pa)[3] and int (*fp)(int) — read the Types panel.', 'declarators-spiral-rule'),
+  fromLesson('Dangling else', 'Compiler: parsing', 'An else binds to the nearest if, whatever the indentation says.', 'dangling-else'),
+  fromLesson('Scopes & shadowing', 'Compiler: types', 'Three variables named x, resolved through a stack of symbol tables.', 'symbol-tables-and-scopes'),
+  fromLesson('Arithmetic conversions', 'Compiler: types', 'Integer promotions and the usual arithmetic conversions, including -1 < 1u being false.', 'type-checking-and-conversions'),
+  fromLesson('Struct padding', 'Compiler: types', 'char/int/short needs 12 bytes; int/short/char needs 8 — alignment decides.', 'struct-layout-padding-alignment'),
+  fromLesson('Array decay', 'Compiler: types', 'sizeof an array vs sizeof a parameter: arrays decay to pointers.', 'lvalues-rvalues-array-decay'),
+  fromLesson('Three-address code', 'Compiler: IR', 'One expression becomes six IR instructions with temporaries — open the IR panel.', 'three-address-code'),
+  fromLesson('CFG: break & continue', 'Compiler: IR', 'A loop with break and continue: see the extra edges in the control-flow graph.', 'control-flow-graphs'),
+  fromLesson('Phi nodes', 'Compiler: IR', 'A variable assigned on three paths gets a phi where they merge (after mem2reg).', 'ssa-form-and-phi-nodes'),
+  fromLesson('mem2reg', 'Compiler: optimization', 'Locals whose address is never taken leave the stack; one whose address escapes stays.', 'mem2reg'),
+  fromLesson('Constant folding', 'Compiler: optimization', 'All arithmetic in main folds away to five constants.', 'constant-folding-and-propagation'),
+  fromLesson('DCE & CSE', 'Compiler: optimization', 'A dead variable, an if (0) branch, and w*h computed twice.', 'dce-and-cse'),
+  fromLesson('LICM', 'Compiler: optimization', 'k * 7 inside a loop is hoisted to the preheader.', 'loop-invariant-code-motion'),
+  fromLesson('Strength reduction', 'Compiler: optimization', 'i * 8 becomes a shift; unsigned / 4 and % 4 become >> 2 and & 3.', 'strength-reduction'),
+  fromLesson('Inlining', 'Compiler: optimization', 'cube(i) calls sq(i); after inlining there is no call in the loop.', 'inlining'),
+  fromLesson('Instruction selection', 'Compiler: codegen', 'Which constants fit in a 12-bit addi immediate and which need lui/addi.', 'instruction-selection'),
+  fromLesson('10 arguments: a0-a7 + stack', 'Compiler: codegen', 'Eight arguments in registers, two on the stack — the RISC-V calling convention.', 'calling-conventions'),
+  fromLesson('Register pressure', 'Compiler: codegen', 'Nine live values in a loop: compare linear scan with the spill-everything allocator.', 'register-allocation'),
+  fromLesson('Stack frames (recursion)', 'Compiler: codegen', 'A recursive function with a local array — watch prologue, epilogue and frames.', 'prologue-epilogue-frame-pointer'),
+  fromLesson('Memory segments', 'Compiler: runtime', 'One variable in each of data, bss, rodata, stack and heap — open the Memory panel.', 'process-memory-model'),
+  fromLesson('UB sandbox (correct as written)', 'Compiler: runtime', 'Two one-line edits turn this correct program into out-of-bounds and use-after-free.', 'undefined-behaviour-sandbox'),
 ];
 
 export const DEFAULT_PROJECT = EXAMPLES[0]!.files;

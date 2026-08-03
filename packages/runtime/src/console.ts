@@ -73,6 +73,12 @@ export class Console {
   }
 
   /** Close stdin so future reads see EOF. */
+  /** Push text back to the front of the input queue (ungetc). */
+  unread(text: string): void {
+    const bytes = new TextEncoder().encode(text);
+    this.input.unshift(...bytes);
+  }
+
   closeInput(): void {
     this.eof = true;
     this.wake();
