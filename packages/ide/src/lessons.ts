@@ -873,8 +873,8 @@ int main(void) {
     ],
     example: `#include <stdio.h>
 
-int main(void) {
-    int i, k = 6, sum = 0;
+int main(int argc, char **argv) {
+    int i, k = argc + 5, sum = 0;   /* k is unknown at compile time, so folding can't remove k * 7 */
     int a[8];
     for (i = 0; i < 8; i++) {
         int scale = k * 7;      /* loop-invariant: hoisted to the preheader */

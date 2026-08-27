@@ -119,15 +119,23 @@ function Cfg({ fn, onHover }: { fn: Func; onHover: (r: EditorRange | null) => vo
         if (!fe || !te) return;
         const fr = fe.getBoundingClientRect();
         const tr = te.getBoundingClientRect();
-        const back = order.indexOf(s) <= order.indexOf(b.name);
+        const fromIdx = order.indexOf(b.name);
+        const toIdx = order.indexOf(s);
+        const back = toIdx <= fromIdx;
+        const skips = !back && toIdx > fromIdx + 1;
         const x1 = fr.left - hb.left + fr.width / 2 + (succ.length > 1 ? (k === 0 ? -40 : 40) : 0);
         const y1 = fr.bottom - hb.top;
-        const x2 = tr.left - hb.left + tr.width / 2 + (back ? 60 : 0);
+        const x2 = tr.left - hb.left + tr.width / 2;
         const y2 = tr.top - hb.top;
         let d: string;
         if (back) {
-          const xr = Math.max(fr.right, tr.right) - hb.left + 24;
+          // Loop edge: around the right side, bottom of source to top of target.
+          const xr = Math.max(fr.right, tr.right) - hb.left + 24 + 8 * k;
           d = `M ${fr.right - hb.left} ${y1 - fr.height / 2} C ${xr} ${y1 - fr.height / 2}, ${xr} ${y2 + tr.height / 2}, ${tr.right - hb.left} ${y2 + tr.height / 2}`;
+        } else if (skips) {
+          // Forward edge over intermediate blocks: along the left margin.
+          const xl = Math.min(fr.left, tr.left) - hb.left - 18 - 8 * k;
+          d = `M ${fr.left - hb.left} ${y1 - fr.height / 2} C ${xl} ${y1 - fr.height / 2}, ${xl} ${y2 + 12}, ${tr.left - hb.left} ${y2 + 12}`;
         } else d = `M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`;
         const kind = t.op === 'condbr' ? (k === 0 ? 'true' : 'false') : t.op === 'switch' ? (k === 0 ? 'default' : 'case') : '';
         out.push({ from: b.name, to: s, d, back, kind });

@@ -1,85 +1,87 @@
 # Compy — see how a compiler works, in the browser
 
-**compy.jyotiprakash.org**
+**[compy.jyotiprakash.org](https://compy.jyotiprakash.org)**
 
 Compy is a teaching tool for *how compilers work*. It uses C89 as the substrate
-and lets students watch every phase of compilation happen to their own program:
-source text becoming **tokens**, tokens becoming a **parse tree**, the tree
-acquiring **types and scopes**, and the program then executing over a **real,
-inspectable process-memory model**. Everything runs client-side: a from-scratch
-C front-end and runtime with **no server and no WebAssembly compiler**.
+and lets students watch every phase of compilation happen to their own program,
+live, as they type:
 
-The roadmap takes the same program through the back half of a compiler too:
-lowering to an **intermediate representation**, **optimization** passes you can
-toggle and diff, and **code generation** to a small target ISA you can step
-through. See [STATUS.md](STATUS.md) for what is built and what remains.
+```
+Source → Tokens → Preprocess → Parse → Types → IR → Optimize → Codegen → Run
+```
+
+Everything runs client-side: a from-scratch C front-end, an LLVM-style IR with
+an optimizer, a RISC-V back-end with two register allocators, and three
+execution engines — all over one real, inspectable process-memory model. There
+is **no server and no WebAssembly compiler**; the entire toolchain is
+TypeScript you can read.
 
 ## What a student sees
 
-- **Lexing.** Translation phases 1–3 (trigraphs, line splicing, comments) and
-  maximal-munch tokenization of the full C89 token set.
-- **Preprocessing** with a "preprocessor lens": `#include` over a virtual
-  filesystem, object- and function-like macros with `#`/`##`, the full `#if`
-  family with a constant-expression evaluator, and predefined macros.
-- **Parsing.** A recursive-descent parser for all of C89 (plus friendly extras
-  and VLAs) that produces an AST with source spans on every node.
-- **Semantic analysis.** Types, scopes, ILP32 layout, usual arithmetic
-  conversions, `Ctrl`+click go-to-definition, and error underlines.
-- **Execution over a real process memory model.** One little-endian ILP32
-  address space laid out like a real program: a NULL guard page, `text`,
-  `rodata`, `data`, `bss`, the **heap** (grows up), and the **stack** (grows
-  down). Stack and heap are kept visually separate, and any byte is editable.
-- **Valgrind-for-beginners.** Every memory access is checked: null-dereference,
-  out-of-bounds, uninitialized reads, use-after-free, double-free, invalid-free,
-  writes to read-only memory, stack overflow, and leaks — each with the exact
-  address, the line, and a plain-English explanation.
-- **A from-scratch libc** over an emulated syscall layer + virtual filesystem:
-  `printf`/`scanf` families, `malloc`/`free`, `string.h`, `math.h`, `ctype.h`,
-  FILE streams, and more — 13 standard headers you can `#include`.
-- **A time-travel debugger:** breakpoints, step in/over/out, continue, a live
-  call stack and locals — navigate forwards *and backwards* through execution.
-- **Multi-file projects** with linking, persisted in your browser, and an
-  in-browser AI assistant (offline C brain + optional local small model).
+| Phase | Panel |
+| --- | --- |
+| **Lexing** | the token stream, raw (translation phases 1–3) or after preprocessing, colour-coded by kind; hover a token to light up its source |
+| **Preprocessing** | a lens over every `#define`, expansion, `#include` and `#if`, plus the output stream with macro-produced tokens marked |
+| **Parsing** | a collapsible AST; every node links to its span; declarators nest from the identifier outward (the "spiral rule" made visible) |
+| **Semantic analysis** | the symbol table with resolved types, sizes, alignment and linkage; struct layouts with padding drawn in; expression types annotated on the AST |
+| **IR** | a typed three-address CFG IR (allocas → mem2reg → SSA with phis) as text or as a drawn control-flow graph; an instruction stepper with register values |
+| **Optimization** | eight toggleable passes — simplifycfg, mem2reg, inlining, constant folding, algebraic simplification / strength reduction, CSE, DCE, LICM — each with an explanation and a before/after diff of every function it changed |
+| **Code generation** | RV32IMFD assembly with source-line comments; the pre-regalloc listing with virtual registers; the allocator's live-interval chart (linear scan vs. spill-everything); a machine stepper showing the register file change instruction by instruction |
+| **Run** | three engines (AST interpreter, IR interpreter, RISC-V simulator) that must agree; the memory visualizer (stack/heap/data/bss/rodata kept separate, every byte editable); valgrind-for-beginners fault reports; a time-travel debugger that steps forwards *and backwards* |
+| **Learn** | a 32-lesson compilers course; each lesson loads a program and tells the student what to look for |
 
 ## Correctness
 
-The interpreter is differentially tested against **real Apple clang**
-(`-std=c89`): a corpus of programs is run on both engines and their stdout and
-exit codes are compared byte-for-byte. This has already caught and fixed real
-bugs. Run it with `npm test` (the oracle suite is skipped automatically where
-`clang` isn't installed).
+Every layer is checked against the one below it, and the bottom is checked
+against real **Apple clang** (`-std=c89`):
+
+- the AST interpreter is differentially tested against clang on a program corpus (stdout and exit code byte-for-byte);
+- the IR lowering and every optimizer pass (alone and in the full pipeline) are differentially tested against the AST interpreter on 36 programs;
+- the generated RISC-V code is differentially tested on the same programs at O0/O2 with both register allocators;
+- every lesson and example program must produce identical output on all three engines.
+
+`npm test` runs all of it (the clang suite skips itself where `clang` is absent).
 
 ## Architecture
 
 A TypeScript monorepo (npm workspaces):
 
-| Package          | Responsibility                                                        |
-| ---------------- | --------------------------------------------------------------------- |
-| `@compy/runtime` | segmented memory model, fault vocabulary, VFS, console, syscalls      |
-| `@compy/cc`      | lexer, preprocessor, parser + AST, types, semantic analysis           |
-| `@compy/vm`      | the tree-walking interpreter and the debugger engine                  |
-| `@compy/libc`    | the C89 standard library + standard headers + the compile/run driver  |
-| `@compy/ide`     | the React app: editor, memory visualizer, debugger, panels            |
-| `@compy/testgen` | the clang differential oracle and program corpus                      |
+| Package           | Responsibility                                                                 |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `@compy/runtime`  | segmented ILP32 memory model, fault vocabulary, VFS, console, syscalls          |
+| `@compy/cc`       | lexer, preprocessor, parser + AST, types, semantic analysis                     |
+| `@compy/vm`       | the AST (tree-walking) interpreter and the debugger engine                      |
+| `@compy/libc`     | the C89 standard library + headers + the compile/run driver                     |
+| `@compy/ir`       | the IR, AST → IR lowering, the IR interpreter, and the optimizer passes         |
+| `@compy/codegen`  | RV32IMFD instruction selection, register allocation, frame layout, simulator    |
+| `@compy/ide`      | the React app: editor, phase bar, phase panels, memory visualizer, lessons, AI  |
+| `@compy/testgen`  | the clang differential oracle and the program corpus                            |
 
-Planned: `@compy/ir` (lowering, SSA/CFG, optimization passes) and
-`@compy/codegen` (target ISA, instruction selection, register allocation).
+The three engines share one `NativeHost` interface, so a single libc serves the
+AST interpreter, the IR interpreter and the simulator (where library functions
+are linked as trampolines at real text addresses, so function pointers work
+uniformly).
 
 ## Develop
 
 ```sh
 npm install
 npm run dev        # start the IDE (Vite dev server)
-npm test           # unit tests (vitest), incl. the clang oracle
+npm test           # unit + differential tests (vitest)
 npm run build      # production build
 npm run test:e2e   # Playwright end-to-end tests (after a build)
 npm run test:all   # unit + build + e2e
 ```
 
-## Dialect
+Deployment to compy.jyotiprakash.org is described in [DEPLOY.md](DEPLOY.md).
 
-C89 by default, with friendly extras accepted (with a warning, toggleable to
-strict): `//` comments, mixed and mid-block declarations, `for`-loop init
-declarations, `long long`, `_Bool`/`<stdbool.h>`, and variable-length arrays.
+## Dialect and target
+
+C89 with friendly extras accepted (warned, toggleable to strict): `//` comments,
+mixed declarations, `for`-loop init declarations, `long long`, `_Bool`, VLAs.
 The model is ILP32, little-endian: `int`/`long`/pointer = 4 bytes, `char` = 1,
-`short` = 2, `long long` = 8, `float` = 4, `double` = 8.
+`short` = 2, `long long` = 8, `float` = 4, `double` = 8. The code generator
+targets RV32IM with the F and D extensions; 64-bit integers live in register
+pairs and use libgcc-style helpers, as on real rv32 toolchains.
+
+Not supported: `setjmp`/`longjmp` and user-defined variadic functions (`va_arg`).
