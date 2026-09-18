@@ -30,6 +30,29 @@ TypeScript you can read.
 | **Run** | three engines (AST interpreter, IR interpreter, RISC-V simulator) that must agree; the memory visualizer (stack/heap/data/bss/rodata kept separate, every byte editable); valgrind-for-beginners fault reports; a time-travel debugger that steps forwards *and backwards* |
 | **Learn** | a 32-lesson compilers course; each lesson loads a program and tells the student what to look for |
 
+## The Language lab
+
+A second mode for automata-theory and parsing courses: define your own tokens and grammar and
+watch the machinery work.
+
+- **Lexing**: a flex-like rule file (priorities, `skip:` rules, start conditions) compiled through
+  Thompson's construction, subset construction and Hopcroft minimization, each drawn; a scanner
+  stepper that animates maximal munch on the input tape; a regex membership tester; a character
+  lexer for `aⁿbⁿ`-style grammars; or paste the tokens directly.
+- **Grammars**: BNF with literals, ε and precedence declarations; nullable/FIRST/FOLLOW replayed
+  iteration by iteration; checks (left recursion, common prefixes, useless symbols) with one-click
+  fixes; ε/unit/useless removal, left-recursion elimination, left factoring and CNF conversion,
+  each shown as a diff.
+- **Parsers**, all on one stepper with the tree growing alongside: recursive descent (generated
+  pseudocode and call stack), LL(1) (predict table), LR(0), SLR(1), canonical LR(1) and LALR(1)
+  (item sets, goto-graph automaton, ACTION/GOTO tables with conflicts), Earley (chart, parse
+  counting for ambiguity), CYK (the triangle), and operator precedence (precedence climbing).
+- **CFG → PDA**: the textbook construction, drawn, with a nondeterministic configuration stepper.
+- 13 presets (dangling else, LALR-but-not-LR(1), palindromes, JSON…) and 19 lessons.
+
+Every parser is cross-checked against Earley on random sentences; transformations are checked to
+preserve the language; the PDA is checked against Earley.
+
 ## Correctness
 
 Every layer is checked against the one below it, and the bottom is checked
@@ -54,6 +77,7 @@ A TypeScript monorepo (npm workspaces):
 | `@compy/libc`     | the C89 standard library + headers + the compile/run driver                     |
 | `@compy/ir`       | the IR, AST → IR lowering, the IR interpreter, and the optimizer passes         |
 | `@compy/codegen`  | RV32IMFD instruction selection, register allocation, frame layout, simulator    |
+| `@compy/lab`      | the language lab engines: regex/automata, scanner, grammar analyses, parsers    |
 | `@compy/ide`      | the React app: editor, phase bar, phase panels, memory visualizer, lessons, AI  |
 | `@compy/testgen`  | the clang differential oracle and the program corpus                            |
 

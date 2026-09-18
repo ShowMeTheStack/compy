@@ -15,13 +15,48 @@ import { OptView } from './OptView';
 import { AsmView } from './AsmView';
 import { LearnView } from './LearnView';
 import { Phase } from './lessons';
+import type React from 'react';
+import { Mode, loadMode, saveMode, LabProject, loadLabProject, saveLabProject } from './mode';
+import { LabApp } from './lab/LabApp';
+import { ErrorBoundary } from './ErrorBoundary';
+
+/** The product switch: the C89 compiler, or the language lab. */
+export function App() {
+  const [mode, setMode] = useState<Mode>(() => loadMode());
+  const [lab, setLab] = useState<LabProject>(() => loadLabProject());
+  useEffect(() => saveMode(mode), [mode]);
+  useEffect(() => saveLabProject(lab), [lab]);
+  const modeSwitch = (
+    <span className="mode-switch" data-testid="mode-switch">
+      <button className={mode === 'c89' ? 'active' : ''} onClick={() => setMode('c89')} data-testid="mode-c89" title="Compile C89 through every phase to RISC-V">
+        C89 compiler
+      </button>
+      <button className={mode === 'lab' ? 'active' : ''} onClick={() => setMode('lab')} data-testid="mode-lab" title="Your own tokens, grammar and parser: automata and parsing theory">
+        Language lab
+      </button>
+    </span>
+  );
+  if (mode === 'lab') {
+    return (
+      <div className="ide">
+        <header className="toolbar">
+          <span className="brand" title="Compy — language lab">Compy</span>
+          {modeSwitch}
+          <span className="dim lab-tagline">define a lexer and a grammar, then watch the automata and parsers work</span>
+        </header>
+        <LabApp project={lab} setProject={setLab} />
+      </div>
+    );
+  }
+  return <CompilerApp modeSwitch={modeSwitch} />;
+}
 
 type PanelTab = PhaseId | 'memory' | 'stack' | 'problems' | 'assistant' | 'learn';
 
 const ENGINE_LABEL: Record<Engine, string> = { ast: 'AST interpreter', ir: 'IR interpreter', machine: 'RISC-V simulator' };
 const PHASE_OF_LESSON: Record<Phase, PanelTab> = { lex: 'tokens', preprocess: 'preprocess', parse: 'ast', sema: 'types', ir: 'ir', opt: 'optimize', codegen: 'asm', run: 'memory' };
 
-export function App() {
+export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
   const [project, setProject] = useState<ProjectState>(() => loadProject());
   const [breakpoints, setBreakpoints] = useState<Record<string, Set<number>>>({});
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -189,6 +224,7 @@ export function App() {
     <div className="ide">
       <header className="toolbar">
         <span className="brand" title="Compy — see how a compiler works">Compy</span>
+        {modeSwitch}
         <button className="btn run" onClick={doRun} data-testid="run">
           ▶ Run
         </button>
@@ -309,6 +345,7 @@ export function App() {
             {!panelTabs.some((t) => t.id === activeTab) && <button className="active phase-tab">{phases.find((p) => p.id === activeTab)?.label ?? activeTab}</button>}
           </div>
           <div className="panel-body">
+            <ErrorBoundary label={panel + ' panel'}>
             {outcome && outcome.faults.length > 0 && (panel === 'memory' || panel === 'stack') && (
               <div className="fault-banner">⚠ {outcome.faults.length} memory issue(s): {outcome.faults.map((f) => f.kind).join(', ')}</div>
             )}
@@ -357,6 +394,7 @@ export function App() {
             )}
             {panel === 'problems' && <ProblemsView analysis={analysis} />}
             {panel === 'assistant' && <Chat onInsertCode={(c) => insertCode(c)} />}
+            </ErrorBoundary>
           </div>
         </div>
       </div>

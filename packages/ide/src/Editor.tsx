@@ -43,6 +43,10 @@ interface EditorProps {
   onGotoDef: (line: number, col: number) => void;
   /** Inline AI completion provider (empty string = no ghost). */
   ghostProvider?: (before: string, after: string) => Promise<string>;
+  /** Syntax highlighting: C (default) or none (lab rule files, plain input). */
+  language?: 'c' | 'plain';
+  /** Hide the breakpoint gutter (lab editors). */
+  noGutter?: boolean;
 }
 
 // -- a compact C stream tokenizer for highlighting ---------------------------
@@ -189,7 +193,7 @@ const editorTheme = EditorView.theme({
   '.cm-ghost': { color: '#6a6a6a', fontStyle: 'italic' },
 });
 
-export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnostics, currentLine, highlight, onGotoDef, ghostProvider }: EditorProps) {
+export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnostics, currentLine, highlight, onGotoDef, ghostProvider, language = 'c', noGutter = false }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const cbs = useRef({ onChange, onToggleBreakpoint, onGotoDef, ghostProvider });
@@ -205,13 +209,12 @@ export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnos
         highlightActiveLine(),
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-        cLanguage,
-        syntaxHighlighting(highlightStyle),
+        ...(language === 'c' ? [cLanguage, syntaxHighlighting(highlightStyle)] : []),
         breakpointField,
         diagnosticsField,
         currentLineField,
         highlightField,
-        gutter({
+        ...(noGutter ? [] : [gutter({
           class: 'cm-breakpoint-gutter',
           lineMarker: (v, block) => {
             const line = v.state.doc.lineAt(block.from).number;
@@ -225,7 +228,7 @@ export function Editor({ doc, onChange, breakpoints, onToggleBreakpoint, diagnos
               return true;
             },
           },
-        }),
+        })]),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) cbs.current.onChange(u.state.doc.toString());
         }),

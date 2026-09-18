@@ -93,12 +93,20 @@ export function runLab(cfg: LabConfig, lexText: string, grammarText: string, inp
     }
     try {
       pda = cfgToPda(grammar);
-      pdaRun = tokens.length <= 40 ? runPda(pda, grammar, tokens) : null;
+      // The nondeterministic run is computed on demand by the PDA panel (see runPdaBounded).
+      pdaRun = null;
     } catch {
       pda = null;
     }
   }
   return { spec, lexer, lex, tokens, grammar, analysis, checks, parse, pda, pdaRun, problems };
+}
+
+/** The PDA simulation with bounds that keep the UI responsive even on left-recursive grammars. */
+export function runPdaBounded(pda: Pda, g: Grammar, tokens: LabToken[]): PdaRun | null {
+  if (tokens.length > 40) return null;
+  const leftRec = checkGrammar(g).some((c) => c.kind === 'left-recursion');
+  return runPda(pda, g, tokens, { maxFrontier: leftRec ? 300 : 1500, maxSteps: leftRec ? 40 : 200 });
 }
 
 export function runParser(id: ParserId, g: Grammar, tokens: LabToken[]): ParseResult {

@@ -91,9 +91,10 @@ export function runPda(pda: Pda, g: Grammar, tokens: LabToken[], opts: { maxFron
         if (t.pop !== null && c.stack[0] !== t.pop) continue;
         // Expanding a nonterminal makes the stack grow: bound it by remaining input (plus slack).
         const stack = [...t.push, ...c.stack.slice(t.pop !== null ? 1 : 0)];
-        const nonEpsilon = stack.filter((s) => !isTerminal(g, s) ? false : true).length;
-        if (nonEpsilon > input.length - c.pos + 1 && !pdaHasNullable(g)) continue;
-        if (stack.length > input.length * 4 + 8) continue;
+        // Prune hopeless configurations: every terminal on the stack must still be matched.
+        const terminalsOnStack = stack.filter((s) => isTerminal(g, s) && s !== '$').length;
+        if (terminalsOnStack > input.length - c.pos) continue;
+        if (stack.length > (input.length - c.pos) * 2 + 6) continue;
         const n = mk(t.to, c.pos + (t.read !== null ? 1 : 0), stack, c.id, t.id);
         const k = key(n);
         if (seen.has(k)) continue;
@@ -117,15 +118,6 @@ export function runPda(pda: Pda, g: Grammar, tokens: LabToken[], opts: { maxFron
   const path: PdaConfig[] = [];
   for (let c: PdaConfig | null = accepted; c; c = c.parent === null ? null : all.get(c.parent) ?? null) path.unshift(c);
   return { frontiers, accepted: accepted !== null, path, truncated };
-}
-
-let nullableCache = new WeakMap<Grammar, boolean>();
-function pdaHasNullable(g: Grammar): boolean {
-  const c = nullableCache.get(g);
-  if (c !== undefined) return c;
-  const v = g.productions.some((p) => p.rhs.length === 0);
-  nullableCache.set(g, v);
-  return v;
 }
 
 export function fmtPdaConfig(c: PdaConfig, tokens: LabToken[]): string {

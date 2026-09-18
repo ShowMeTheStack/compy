@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseGrammar, analyzeGrammar, checkGrammar, randomSentence, Grammar, ParserId } from './grammar';
 import { LabToken } from './lexer';
 import { earleyParse } from './parsers/earley';
-import { runParser, runLab } from './run';
+import { runParser, runLab, runPdaBounded } from './run';
 import { buildLrTables } from './parsers/lr';
 import { buildLl1Table } from './parsers/ll1';
 import { transform, TRANSFORMS, TransformId } from './transform';
@@ -217,7 +217,7 @@ describe('presets run end to end', () => {
         expect(r.parse!.accepted, `${p.name}: ${r.parse!.error?.message}`).toBe(true);
         // The top-down PDA loops on left recursion (its frontier explodes); only
         // left-recursion-free grammars are expected to be accepted by the stepper.
-        if (!r.checks.some((c) => c.kind === 'left-recursion')) expect(r.pdaRun?.accepted, p.name + ' pda').toBe(true);
+        if (!r.checks.some((c) => c.kind === 'left-recursion')) expect(runPdaBounded(r.pda!, r.grammar!, r.tokens)?.accepted, p.name + ' pda').toBe(true);
       }
     });
   }
