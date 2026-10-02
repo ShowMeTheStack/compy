@@ -7,7 +7,9 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   retries: 0,
-  reporter: [['list']],
+  workers: process.env.CI ? 4 : 8,
+  timeout: 45_000,
+  reporter: process.env.CI ? [['list']] : [['dot'], ['json', { outputFile: 'test-results/results.json' }]],
   use: {
     baseURL: 'http://127.0.0.1:4173',
     deviceScaleFactor: 1,

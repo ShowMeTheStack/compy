@@ -63,7 +63,11 @@ against real **Apple clang** (`-std=c89`):
 - the generated RISC-V code is differentially tested on the same programs at O0/O2 with both register allocators;
 - every lesson and example program must produce identical output on all three engines.
 
-`npm test` runs all of it (the clang suite skips itself where `clang` is absent).
+`npm test` runs all of it (the clang suite skips itself where `clang` is absent). On top of
+that, `npm run test:e2e` drives the real UI in a headless browser through 3,669 generated
+cases: every program on every engine and in every panel, the debugger and steppers, the
+optimizer toggles, every lab preset with every parser, the lessons, and layout invariants
+(no overflow, no overlapping controls) at four viewport widths.
 
 ## Architecture
 

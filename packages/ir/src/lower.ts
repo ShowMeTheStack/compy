@@ -64,6 +64,8 @@ interface FnCtx {
   sret: Reg | null;
   blockCounter: Map<string, number>;
   globalRegs: Map<string, Reg>;
+  /** Byte size of each variable-length array local (symbol id → value). */
+  vlaSizes: Map<number, Value>;
 }
 
 type CVal = { k: 'int'; v: bigint } | { k: 'float'; v: number } | { k: 'addr'; reloc: Omit<Reloc, 'offset'> };
@@ -418,6 +420,7 @@ class Lowerer {
       sret: null,
       blockCounter: new Map(),
       globalRegs: new Map(),
+      vlaSizes: new Map(),
     };
     this.curLine = fn.line ?? 0;
 
@@ -591,6 +594,7 @@ class Lowerer {
         const size = this.bin('mul', 'i32', n, constInt('i32', Math.max(1, T.sizeof(type.of))));
         slot = this.newReg('ptr', sym.name + '.addr');
         this.emit({ op: 'alloca', dst: slot, size, align: T.alignof(type.of), name: sym.name, ctype: T.formatType(type), ct: type });
+        this.ctx.vlaSizes.set(sym.id, size);
       } else {
         slot = this.alloca(type, sym.name);
       }
@@ -1014,7 +1018,14 @@ class Lowerer {
         return this.toType(inner, this.exprType(e.operand), to);
       }
       case 'CallExpr': return this.call(e);
-      case 'SizeofExpr': return constInt('i32', T.sizeof(this.exprType(e.operand)));
+      case 'SizeofExpr': {
+        if (e.operand.kind === 'Ident') {
+          const sym = this.sema.useOf.get(e.operand);
+          const vla = sym && this.ctx.vlaSizes.get(sym.id);
+          if (vla) return vla;
+        }
+        return constInt('i32', T.sizeof(this.exprType(e.operand)));
+      }
       case 'SizeofType': return constInt('i32', T.sizeof(this.typeOfTypeName(e.type)));
     }
   }

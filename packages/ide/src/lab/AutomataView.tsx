@@ -235,7 +235,7 @@ function Tester({ nfa, dfa, names, probe, setProbe }: { nfa: Nfa; dfa: Dfa; name
           <button className={machine === 'nfa' ? 'active' : ''} onClick={() => setMachine('nfa')}>NFA</button>
         </span>
         <span className={`verdict ${run.d.accepted ? 'yes' : 'no'}`} data-testid="verdict">
-          {probe === '' && p === 0 ? '' : run.d.accepted ? `accepted${names.length > 1 ? ` as ${names[run.d.ruleId ?? 0]}` : ''}` : 'rejected'}
+          {run.d.accepted ? `accepted${names.length > 1 ? ` as ${names[run.d.ruleId ?? 0]}` : ''}${probe === '' ? ' (the empty string)' : ''}` : `rejected${probe === '' ? ' (the empty string)' : ''}`}
         </span>
       </div>
       <div className="tape">

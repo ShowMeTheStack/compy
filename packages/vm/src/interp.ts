@@ -119,6 +119,8 @@ export class Interp implements NativeHost {
 
   private readonly globalAddr = new Map<number, number>();
   private locals: Map<number, number>[] = [];
+  /** Runtime types of variable-length arrays in the current frames (symbol id → type). */
+  private vlaTypes: Map<number, T.CType>[] = [];
   readonly callStack: StackFrame[] = [];
   private debug?: DebugController;
   private readonly symById = new Map<number, SymbolInfo>();
@@ -272,6 +274,7 @@ export class Interp implements NativeHost {
     const savedTop = this.mem.stackTop;
     const frame = new Map<number, number>();
     this.locals.push(frame);
+    this.vlaTypes.push(new Map());
     this.callStack.push({ name: A.declaratorName(def.declarator) ?? '<fn>', line: def.declarator.span.start.line });
     try {
       const fdecl = A.functionDeclaratorOf(def.declarator);
@@ -291,6 +294,7 @@ export class Interp implements NativeHost {
       return null;
     } finally {
       this.locals.pop();
+      this.vlaTypes.pop();
       this.callStack.pop();
       this.mem.popStackTo(savedTop);
     }
@@ -354,6 +358,7 @@ export class Interp implements NativeHost {
       const type = this.effectiveType(sym.type, init.init, init.declarator);
       const addr = this.mem.pushStack(Math.max(1, T.sizeof(type)));
       this.frame().set(sym.id, addr);
+      if (sym.type.kind === 'array' && sym.type.vla) this.vlaTypes[this.vlaTypes.length - 1]?.set(sym.id, type);
       if (init.init) {
         // C: members not named in a brace list are zero-initialized.
         if (init.init.kind === 'ListInit') this.mem.fill(addr, 0, Math.max(1, T.sizeof(type)));
@@ -546,8 +551,14 @@ export class Interp implements NativeHost {
         return convert(this.eval(e.operand), this.exprType(e));
       case 'CallExpr':
         return this.evalCall(e);
-      case 'SizeofExpr':
+      case 'SizeofExpr': {
+        if (e.operand.kind === 'Ident') {
+          const sym = this.sema.useOf.get(e.operand);
+          const vla = sym && this.vlaTypes[this.vlaTypes.length - 1]?.get(sym.id);
+          if (vla) return intVal(T.ULONG, BigInt(T.sizeof(vla)));
+        }
         return intVal(T.ULONG, BigInt(T.sizeof(this.semaType(e.operand))));
+      }
       case 'SizeofType':
         return intVal(T.ULONG, BigInt(T.sizeof(this.sema.typeOfName.get(e.type) ?? T.INT)));
     }

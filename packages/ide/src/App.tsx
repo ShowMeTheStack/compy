@@ -15,6 +15,7 @@ import { OptView } from './OptView';
 import { AsmView } from './AsmView';
 import { LearnView } from './LearnView';
 import { Phase } from './lessons';
+import type { PassId } from '@compy/ir';
 import type React from 'react';
 import { Mode, loadMode, saveMode, LabProject, loadLabProject, saveLabProject } from './mode';
 import { LabApp } from './lab/LabApp';
@@ -26,6 +27,12 @@ export function App() {
   const [lab, setLab] = useState<LabProject>(() => loadLabProject());
   useEffect(() => saveMode(mode), [mode]);
   useEffect(() => saveLabProject(lab), [lab]);
+  useEffect(() => {
+    (window as unknown as { __compyMode?: unknown }).__compyMode = {
+      setMode: (m: Mode) => setMode(m),
+      loadLab: (p: Partial<LabProject>) => setLab((cur) => ({ ...cur, ...p, config: { ...cur.config, ...(p.config ?? {}) } })),
+    };
+  });
   const modeSwitch = (
     <span className="mode-switch" data-testid="mode-switch">
       <button className={mode === 'c89' ? 'active' : ''} onClick={() => setMode('c89')} data-testid="mode-c89" title="Compile C89 through every phase to RISC-V">
@@ -63,6 +70,8 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
   const [analysis, setAnalysis] = useState<AnalyzeResult | null>(null);
   const [stdin, setStdin] = useState('');
   const [debugStep, setDebugStep] = useState<number | null>(null);
+  /** True once stepping ran past the last statement: the program has finished but the session stays open. */
+  const [debugDone, setDebugDone] = useState(false);
   const [panel, setPanel] = useState<PanelTab>('learn');
   const [gotoLine, setGotoLine] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<EditorRange | null>(null);
@@ -104,19 +113,24 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
   const runWith = (eng: Engine, trace: boolean): Outcome => execute(project.files, { stdin, trace, engine: eng, settings });
   const doRun = () => {
     setDebugStep(null);
+    setDebugDone(false);
     setOutcome(runWith(engine, false));
     if (!['memory', 'stack', 'problems'].includes(panel)) setPanel('memory');
   };
   const doDebug = (eng: Engine = engine) => {
     const o = runWith(eng, true);
     setOutcome(o);
+    setDebugDone(false);
     if (o.snapshots.length > 0) {
       const first = o.snapshots.findIndex((s) => (breakpoints[fileBase(s.file)] ?? new Set()).has(s.line));
       setDebugStep(first >= 0 ? first : 0);
       if (!['memory', 'stack', 'ir', 'asm'].includes(panel)) setPanel('memory');
     } else setDebugStep(null);
   };
-  const stopDebug = () => setDebugStep(null);
+  const stopDebug = () => {
+    setDebugStep(null);
+    setDebugDone(false);
+  };
   const traceOn = (eng: Engine) => {
     setEngine(eng);
     doDebug(eng);
@@ -128,12 +142,18 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
     for (let i = debugStep + 1; i < outcome.snapshots.length; i++) {
       if (predicate(outcome.snapshots[i]!, cur)) {
         setDebugStep(i);
+        setDebugDone(false);
         return;
       }
     }
-    setDebugStep(null);
+    // Ran off the end: stay at the last snapshot so the student can step back.
+    setDebugStep(outcome.snapshots.length - 1);
+    setDebugDone(true);
   };
-  const stepBack = () => setDebugStep((s) => (s === null ? null : Math.max(0, s - 1)));
+  const stepBack = () => {
+    setDebugDone(false);
+    setDebugStep((s) => (s === null ? null : Math.max(0, s - 1)));
+  };
   const stepInto = () => nav(() => true);
   const stepOver = () => nav((s, cur) => s.depth <= cur.depth);
   const stepOut = () => nav((s, cur) => s.depth < cur.depth);
@@ -165,6 +185,11 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
     return e ? e.complete(before, after) : Promise.resolve('');
   };
   const insertCode = (code: string, preferred = 'snippet.c') => {
+    // A whole program (it defines main) becomes the project; a fragment is added as a file.
+    if (/\bmain\s*\(/.test(code)) {
+      loadExample({ [preferred]: code.endsWith('\n') ? code : code + '\n' });
+      return;
+    }
     let n = 1;
     let name = preferred;
     while (project.files[name] !== undefined) name = preferred.replace(/\.c$/, '') + `${++n}.c`;
@@ -177,8 +202,18 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
     setOutcome(null);
     setDebugStep(null);
   };
+  // Test hook: lets the end-to-end suite load arbitrary programs and settings.
+  useEffect(() => {
+    (window as unknown as { __compy?: unknown }).__compy = {
+      load: (files: Record<string, string>) => loadExample(files),
+      setEngine: (e: Engine) => setEngine(e),
+      setStdin: (s: string) => setStdin(s),
+      setPanel: (p: PanelTab) => setPanel(p),
+      setPasses: (passes: PassId[]) => setSettings((s) => ({ ...s, passes })),
+    };
+  });
 
-  const stdout = debugging && snapshot ? outcome!.stdout.slice(0, snapshot.outLen) : outcome?.stdout ?? '';
+  const stdout = debugging && snapshot && !debugDone ? outcome!.stdout.slice(0, snapshot.outLen) : outcome?.stdout ?? '';
   const stderr = outcome?.stderr ?? '';
   const errorCount = analysis?.diagnostics.filter((d) => d.severity === 'error').length ?? 0;
 
@@ -242,6 +277,7 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
             <button className="btn stop" onClick={stopDebug} title="Stop">■</button>
             <span className="step-count">
               step {(debugStep ?? 0) + 1}/{outcome?.snapshots.length ?? 0}
+              {debugDone && <span className="done-tag"> · finished, exit {outcome?.exitCode ?? '?'}</span>}
             </span>
           </span>
         )}
@@ -324,7 +360,7 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
             <div className="console-out" data-testid="console">
               {stdout}
               {stderr && <span className="stderr">{stderr}</span>}
-              {outcome && !debugging && outcome.exitCode !== undefined && (
+              {outcome && (!debugging || debugDone) && outcome.exitCode !== undefined && (
                 <div className="exit">
                   → exited with code {outcome.exitCode} on the {ENGINE_LABEL[outcome.engine]}
                   {outcome.steps ? ` after ${outcome.steps.toLocaleString()} ${outcome.engine === 'ir' ? 'IR instructions' : 'machine instructions'}` : ''}

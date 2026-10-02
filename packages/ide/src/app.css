@@ -1099,3 +1099,5 @@ button.link {
 .tree-node { animation: grow 0.25s ease-out; }
 .tree-node.latest .tree-ellipse, .tree-node.latest .tree-box { stroke: var(--accent); stroke-width: 2.5; }
 @keyframes grow { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; } }
+
+.done-tag { color: var(--accent); }
