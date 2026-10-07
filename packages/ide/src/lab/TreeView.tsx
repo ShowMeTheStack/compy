@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { TreeNode } from '@compy/lab';
+import { DiagramFrame } from './DiagramFrame';
 
 /**
  * Parse tree as an SVG, laid out with leaves evenly spaced left to right
@@ -21,8 +22,8 @@ interface Placed {
 }
 
 export function ParseTree({ nodes, roots, highlightLatest = true, onHover, compact }: Props) {
-  const dx = compact ? 34 : 46;
-  const dy = compact ? 46 : 60;
+  const dx = compact ? 62 : 70;
+  const dy = compact ? 50 : 62;
   const laid = useMemo(() => {
     const placed: Placed[] = [];
     let nextLeaf = 0;
@@ -58,8 +59,8 @@ export function ParseTree({ nodes, roots, highlightLatest = true, onHover, compa
   if (laid.placed.length === 0) return <p className="hint">The tree appears as the parser builds it.</p>;
   const byId = new Map(laid.placed.map((p) => [p.node.id, p] as const));
   return (
-    <div className="tree-wrap">
-      <svg className="parse-tree" width={laid.width} height={laid.height} viewBox={`0 0 ${laid.width} ${laid.height}`}>
+    <DiagramFrame title={`parse tree: ${laid.placed.length} nodes`} width={laid.width} height={laid.height} maxHeight={compact ? 300 : 420} testId="tree-frame">
+      <svg className="parse-tree" width={laid.width} height={laid.height} viewBox={`0 0 ${laid.width} ${laid.height}`} data-diagram="tree">
         {laid.placed.map((p) =>
           p.node.children.map((c) => {
             const q = byId.get(c);
@@ -81,7 +82,7 @@ export function ParseTree({ nodes, roots, highlightLatest = true, onHover, compa
           </g>
         ))}
       </svg>
-    </div>
+    </DiagramFrame>
   );
 }
 

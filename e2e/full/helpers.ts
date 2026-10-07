@@ -83,6 +83,65 @@ export async function assertLayout(page: Page): Promise<void> {
         }
       }
     }
+    // Diagrams: nodes, labels and edges must not overlap one another.
+    for (const svg of Array.from(document.querySelectorAll('svg[data-diagram="graph"]'))) {
+      const nodeEls = Array.from(svg.querySelectorAll('g.aut-state'));
+      const nodeBoxes = nodeEls.map((g) => ({ id: Number(g.getAttribute('data-node')), r: g.getBoundingClientRect() }));
+      const labelEls = Array.from(svg.querySelectorAll('text.aut-label'));
+      const labels = labelEls.map((t) => ({ edge: t.getAttribute('data-edge'), r: t.getBoundingClientRect() }));
+      const inter = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+      for (let i = 0; i < nodeBoxes.length; i++) for (let j = i + 1; j < nodeBoxes.length; j++) if (inter(nodeBoxes[i]!.r, nodeBoxes[j]!.r)) problems.push(`diagram: nodes ${nodeBoxes[i]!.id} and ${nodeBoxes[j]!.id} overlap`);
+      for (let i = 0; i < labels.length; i++) {
+        for (let j = i + 1; j < labels.length; j++) if (inter(labels[i]!.r, labels[j]!.r)) problems.push(`diagram: labels of edges ${labels[i]!.edge} and ${labels[j]!.edge} overlap`);
+        for (const n of nodeBoxes) if (inter(labels[i]!.r, n.r)) problems.push(`diagram: label of edge ${labels[i]!.edge} overlaps node ${n.id}`);
+      }
+      // Edge paths must not pass through any node (other than their endpoints) nor through labels of other edges.
+      const paths = Array.from(svg.querySelectorAll('path.aut-edge')) as SVGPathElement[];
+      const svgRect = svg.getBoundingClientRect();
+      const vb = (svg as SVGSVGElement).viewBox.baseVal;
+      const sx = svgRect.width / (vb && vb.width ? vb.width : svgRect.width);
+      const sy = svgRect.height / (vb && vb.height ? vb.height : svgRect.height);
+      // Bucket nodes and labels by screen x so each sample checks only nearby items.
+      const BUCKET = 120;
+      const nodeBuckets = new Map<number, typeof nodeBoxes>();
+      for (const n of nodeBoxes) for (let b = Math.floor(n.r.left / BUCKET); b <= Math.floor(n.r.right / BUCKET); b++) nodeBuckets.set(b, [...(nodeBuckets.get(b) ?? []), n]);
+      const labelBuckets = new Map<number, typeof labels>();
+      for (const l of labels) for (let b = Math.floor(l.r.left / BUCKET); b <= Math.floor(l.r.right / BUCKET); b++) labelBuckets.set(b, [...(labelBuckets.get(b) ?? []), l]);
+      const stepPx = paths.length > 150 ? 10 : 4;
+      for (const path of paths) {
+        const from = Number(path.getAttribute('data-from'));
+        const to = Number(path.getAttribute('data-to'));
+        const edge = path.getAttribute('data-edge');
+        const len = path.getTotalLength();
+        for (let d = 6; d < len - 6; d += stepPx) {
+          const p = path.getPointAtLength(d);
+          const px = svgRect.left + p.x * sx;
+          const py = svgRect.top + p.y * sy;
+          for (const n of nodeBuckets.get(Math.floor(px / BUCKET)) ?? []) {
+            if (n.id === from || n.id === to) continue;
+            if (px > n.r.left + 1 && px < n.r.right - 1 && py > n.r.top + 1 && py < n.r.bottom - 1) {
+              problems.push(`diagram: edge ${from}→${to} passes through node ${n.id}`);
+              break;
+            }
+          }
+          for (const l of labelBuckets.get(Math.floor(px / BUCKET)) ?? []) {
+            if (l.edge === edge) continue;
+            if (px > l.r.left + 1 && px < l.r.right - 1 && py > l.r.top + 1 && py < l.r.bottom - 1) {
+              problems.push(`diagram: edge ${from}→${to} cuts through the label of edge ${l.edge}`);
+              break;
+            }
+          }
+        }
+      }
+    }
+    for (const svg of Array.from(document.querySelectorAll('svg[data-diagram="tree"]'))) {
+      const boxes = Array.from(svg.querySelectorAll('g.tree-node')).map((g) => g.getBoundingClientRect());
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]!;
+        const b = boxes[j]!;
+        if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) problems.push(`tree: nodes ${i} and ${j} overlap`);
+      }
+    }
     // The editor pane and the panel must not overlap each other.
     const ed = document.querySelector('.editor-pane');
     const pn = document.querySelector('.panel');
@@ -91,7 +150,7 @@ export async function assertLayout(page: Page): Promise<void> {
       const b = rect(pn);
       if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2) problems.push('editor pane and side panel overlap');
     }
-    return problems;
+    return [...new Set(problems)];
   });
   expect(report, 'layout problems').toEqual([]);
 }

@@ -797,11 +797,8 @@ button.link {
 
 .cfg {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 34px;
-  padding: 10px 70px 10px 40px;
+  display: block;
+  padding: 0;
 }
 .cfg-edges {
   position: absolute;
@@ -977,20 +974,32 @@ button.link {
 .lab-problems { height: 22%; min-height: 80px; }
 
 /* automata */
-.automaton-wrap {
-  overflow: auto;
-  background: #141414;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  margin: 6px 0;
-  max-height: 420px;
-}
+.diagram-frame { border: 1px solid var(--border); border-radius: 6px; margin: 6px 0; background: #141414; }
+.diagram-bar { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-bottom: 1px solid var(--border); font-size: 11.5px; background: #1b1b1b; }
+.diagram-title { color: #dcdcaa; font-family: ui-monospace, Menlo, monospace; }
+.diagram-inline { overflow: auto; }
+.diagram-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.diagram-window { width: 94vw; height: 92vh; background: #141414; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.diagram-canvas { flex: 1; overflow: hidden; position: relative; cursor: grab; background: radial-gradient(circle at 1px 1px, #222 1px, transparent 1px); background-size: 24px 24px; }
+.diagram-canvas:active { cursor: grabbing; }
+.diagram-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.diagram-help { padding: 3px 8px; font-size: 11px; border-top: 1px solid var(--border); }
+.zoom-pct { min-width: 44px; text-align: center; }
 .automaton { display: block; }
 .aut-edge { fill: none; stroke: #6c7a86; stroke-width: 1.4; transition: stroke 0.2s; }
-.aut-edge.back { stroke: #8a7a4c; }
+.aut-edge.back { stroke: #c9a24c; stroke-dasharray: 5 3; }
+.aut-edge.false { stroke: #e06c75; }
+.aut-label.false { fill: #e06c75; }
+.aut-rect { fill: #1a1a1a; stroke: #3c3c3c; stroke-width: 1.2; }
+.aut-rect-title { fill: #26302e; stroke: none; }
+.aut-block-title { fill: #dcdcaa; font-size: 11.5px; font-family: ui-monospace, Menlo, monospace; }
+.aut-line { fill: #d4d4d4; font-size: 11px; font-family: ui-monospace, Menlo, monospace; white-space: pre; }
+.aut-line.term { fill: #9cdcfe; }
+.aut-line:hover { fill: #fff; }
+.aut-state.rect.active .aut-rect { stroke: var(--accent); stroke-width: 2.5; }
 .aut-edge.hot { stroke: var(--accent); stroke-width: 2.4; }
 .aut-edge.start { stroke: #9aa7b2; }
-.aut-label { fill: #c9d1d9; font-size: 11px; font-family: ui-monospace, Menlo, monospace; paint-order: stroke; stroke: #141414; stroke-width: 3px; }
+.aut-label { fill: #c9d1d9; font-size: 11px; font-family: ui-monospace, Menlo, monospace; paint-order: stroke; stroke: #141414; stroke-width: 4px; }
 .aut-label.hot { fill: var(--accent); font-weight: 700; }
 .aut-state { cursor: default; }
 .aut-circle { fill: #232a30; stroke: #9aa7b2; stroke-width: 1.5; transition: fill 0.25s, stroke 0.25s, r 0.2s; }
@@ -1098,6 +1107,9 @@ button.link {
 .tree-eps { fill: #888; font-size: 10px; }
 .tree-node { animation: grow 0.25s ease-out; }
 .tree-node.latest .tree-ellipse, .tree-node.latest .tree-box { stroke: var(--accent); stroke-width: 2.5; }
-@keyframes grow { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; } }
+@keyframes grow { from { opacity: 0; } to { opacity: 1; } }
 
 .done-tag { color: var(--accent); }
+.diagram-fit { position: relative; overflow: hidden; }
+.diagram-fit-note { font-size: 11px; padding: 2px 8px; }
+.aut-leader { stroke: #6c7a86; stroke-width: 1; stroke-dasharray: 2 3; }

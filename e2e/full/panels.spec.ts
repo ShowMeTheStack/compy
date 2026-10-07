@@ -48,7 +48,7 @@ for (const panel of PANELS) {
           case 'ir':
             await expect(page.getByTestId('ir')).toContainText('define');
             await page.locator('.irview .seg-toggle button', { hasText: 'CFG' }).click();
-            await expect(page.locator('.cfg-block').first()).toBeVisible();
+            await expect(page.getByTestId('cfg-graph')).toBeVisible();
             await page.locator('.irview select').first().selectOption('optimized');
             await page.locator('.irview .seg-toggle button', { hasText: 'text' }).click();
             await expect(page.getByTestId('ir')).toContainText('define');

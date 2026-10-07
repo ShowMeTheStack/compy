@@ -53,6 +53,10 @@ watch the machinery work.
 Every parser is cross-checked against Earley on random sentences; transformations are checked to
 preserve the language; the PDA is checked against Earley.
 
+All graphs (automata, goto graphs, control-flow graphs) share one layered layout engine that
+guarantees edges never pass through nodes and labels never overlap anything; every diagram opens
+as a central panel with zoom and pan.
+
 ## Correctness
 
 Every layer is checked against the one below it, and the bottom is checked

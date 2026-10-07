@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Automaton } from './lab/Automaton';
 import { Module, Func, fmtInstr, fmtValue, successors, terminatorOf, isTerminator } from '@compy/ir';
 import { EditorRange } from './Editor';
 import { IrTraceEntry } from './session';
@@ -97,91 +98,28 @@ function bytesToText(b: Uint8Array): string {
   return s;
 }
 
-/** A control-flow graph drawn as block cards with SVG edges. */
+/** A control-flow graph: basic blocks as boxes, edges routed around them. */
 function Cfg({ fn, onHover }: { fn: Func; onHover: (r: EditorRange | null) => void }) {
-  const host = useRef<HTMLDivElement>(null);
-  const refs = useRef(new Map<string, HTMLDivElement>());
-  const [edges, setEdges] = useState<{ from: string; to: string; d: string; back: boolean; kind: string }[]>([]);
-  const order = useMemo(() => fn.blocks.map((b) => b.name), [fn]);
-
-  const layout = () => {
-    const hostEl = host.current;
-    if (!hostEl) return;
-    const hb = hostEl.getBoundingClientRect();
-    const out: typeof edges = [];
+  const { nodes, edges } = useMemo(() => {
+    const idOf = new Map(fn.blocks.map((b, k) => [b.name, k] as const));
+    const nodes = fn.blocks.map((b, k) => ({ id: k, label: b.name, lines: b.instrs.map((i) => fmtInstr(i)), start: k === 0 }));
+    const edges: { from: number; to: number; label: string; kind?: string }[] = [];
     for (const b of fn.blocks) {
       const t = terminatorOf(b);
       if (!t) continue;
-      const succ = successors(t);
-      succ.forEach((s, k) => {
-        const fe = refs.current.get(b.name);
-        const te = refs.current.get(s);
-        if (!fe || !te) return;
-        const fr = fe.getBoundingClientRect();
-        const tr = te.getBoundingClientRect();
-        const fromIdx = order.indexOf(b.name);
-        const toIdx = order.indexOf(s);
-        const back = toIdx <= fromIdx;
-        const skips = !back && toIdx > fromIdx + 1;
-        const x1 = fr.left - hb.left + fr.width / 2 + (succ.length > 1 ? (k === 0 ? -40 : 40) : 0);
-        const y1 = fr.bottom - hb.top;
-        const x2 = tr.left - hb.left + tr.width / 2;
-        const y2 = tr.top - hb.top;
-        let d: string;
-        if (back) {
-          // Loop edge: around the right side, bottom of source to top of target.
-          const xr = Math.max(fr.right, tr.right) - hb.left + 24 + 8 * k;
-          d = `M ${fr.right - hb.left} ${y1 - fr.height / 2} C ${xr} ${y1 - fr.height / 2}, ${xr} ${y2 + tr.height / 2}, ${tr.right - hb.left} ${y2 + tr.height / 2}`;
-        } else if (skips) {
-          // Forward edge over intermediate blocks: along the left margin.
-          const xl = Math.min(fr.left, tr.left) - hb.left - 18 - 8 * k;
-          d = `M ${fr.left - hb.left} ${y1 - fr.height / 2} C ${xl} ${y1 - fr.height / 2}, ${xl} ${y2 + 12}, ${tr.left - hb.left} ${y2 + 12}`;
-        } else d = `M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`;
+      successors(t).forEach((s, k) => {
         const kind = t.op === 'condbr' ? (k === 0 ? 'true' : 'false') : t.op === 'switch' ? (k === 0 ? 'default' : 'case') : '';
-        out.push({ from: b.name, to: s, d, back, kind });
+        edges.push({ from: idOf.get(b.name)!, to: idOf.get(s)!, label: kind, kind });
       });
     }
-    setEdges(out);
-  };
-  useLayoutEffect(layout, [fn]);
-  useEffect(() => {
-    const ro = new ResizeObserver(layout);
-    if (host.current) ro.observe(host.current);
-    return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return { nodes, edges };
   }, [fn]);
-
   return (
-    <div className="cfg" ref={host} onMouseLeave={() => onHover(null)}>
-      <svg className="cfg-edges">
-        <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#8fd3c4" />
-          </marker>
-          <marker id="arrow-back" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e9a23b" />
-          </marker>
-        </defs>
-        {edges.map((e, k) => (
-          <path key={k} d={e.d} className={`cfg-edge ${e.back ? 'back' : ''} ${e.kind}`} markerEnd={e.back ? 'url(#arrow-back)' : 'url(#arrow)'} />
-        ))}
-      </svg>
-      {fn.blocks.map((b) => (
-        <div
-          key={b.name}
-          className="cfg-block"
-          ref={(el) => {
-            if (el) refs.current.set(b.name, el);
-          }}
-        >
-          <div className="cfg-title">{b.name}</div>
-          {b.instrs.map((i, k) => (
-            <div key={k} className={`cfg-instr ${isTerminator(i) ? 'term' : ''}`} onMouseEnter={() => onHover(i.line ? { line: i.line, col: 1, endLine: i.line, endCol: 0 } : null)}>
-              {fmtInstr(i)}
-            </div>
-          ))}
-        </div>
-      ))}
+    <div className="cfg" onMouseLeave={() => onHover(null)}>
+      <Automaton nodes={nodes} edges={edges} start={0} title={`CFG of @${fn.name}: ${fn.blocks.length} blocks`} testId="cfg-graph" maxHeight={520} onLineHover={(id, line) => {
+        const i = fn.blocks[id]?.instrs[line];
+        onHover(i?.line ? { line: i.line, col: 1, endLine: i.line, endCol: 0 } : null);
+      }} />
       <p className="hint cfg-legend">
         <span className="edge-key true">true</span> <span className="edge-key false">false</span> <span className="edge-key back">back edge (loop)</span>
       </p>
