@@ -38,7 +38,8 @@ export function runWithClang(source: string, stdin = '', argv: string[] = []): {
   const bin = join(dir, 'prog');
   try {
     writeFileSync(src, source);
-    execFileSync('clang', ['-std=c89', '-Wno-everything', '-o', bin, src], { stdio: 'ignore' });
+    // -lm: on Linux the math functions live in a separate library.
+    execFileSync('clang', ['-std=c89', '-Wno-everything', '-o', bin, src, '-lm'], { stdio: 'ignore' });
     let stdout = '';
     let exit = 0;
     try {
