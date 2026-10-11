@@ -21,6 +21,15 @@ import { Mode, loadMode, saveMode, LabProject, loadLabProject, saveLabProject } 
 import { LabApp } from './lab/LabApp';
 import { ErrorBoundary } from './ErrorBoundary';
 
+/** Copyright and license, visible in both modes; links to the full text. */
+function LicenseNote() {
+  return (
+    <a className="license-note" href="https://github.com/ShowMeTheStack/compy/blob/main/LICENSE" target="_blank" rel="noreferrer" title="Compy is free software under the GNU GPL v3 or later. Source on GitHub." data-testid="license-note">
+      © 2026 Jyotiprakash Mishra · GPL-3.0-or-later
+    </a>
+  );
+}
+
 /** The product switch: the C89 compiler, or the language lab. */
 export function App() {
   const [mode, setMode] = useState<Mode>(() => loadMode());
@@ -50,6 +59,8 @@ export function App() {
           <span className="brand" title="Compy — language lab">Compy</span>
           {modeSwitch}
           <span className="dim lab-tagline">define a lexer and a grammar, then watch the automata and parsers work</span>
+          <span className="spacer" />
+          <LicenseNote />
         </header>
         <LabApp project={lab} setProject={setLab} />
       </div>
@@ -310,6 +321,7 @@ export function CompilerApp({ modeSwitch }: { modeSwitch: React.ReactNode }) {
         </select>
         <span className="spacer" />
         {errorCount > 0 && <span className="err-count">{errorCount} error(s)</span>}
+        <LicenseNote />
       </header>
 
       <PhaseBar phases={phases} active={(['tokens', 'preprocess', 'ast', 'types', 'ir', 'optimize', 'asm'] as PanelTab[]).includes(panel) ? (panel as PhaseId) : panel === 'memory' || panel === 'stack' ? 'run' : null} onSelect={onPhase} />

@@ -1113,3 +1113,5 @@ button.link {
 .diagram-fit { position: relative; overflow: hidden; }
 .diagram-fit-note { font-size: 11px; padding: 2px 8px; }
 .aut-leader { stroke: #6c7a86; stroke-width: 1; stroke-dasharray: 2 3; }
+.license-note { color: var(--dim); font-size: 11px; text-decoration: none; white-space: nowrap; margin-left: 8px; }
+.license-note:hover { color: var(--accent); }

@@ -343,3 +343,10 @@ C89 with friendly extras accepted with a warning: `//` comments, declarations af
 statements, declarations in `for`, `long long`, `_Bool`, and variable-length arrays. The
 memory model is ILP32 and little-endian. The code generator targets RV32IM with F and D.
 Not supported: `setjmp`/`longjmp` and user-defined variadic functions.
+
+## License
+
+Compy is free software under the GNU General Public License, version 3 or later. See
+`LICENSE` for the full text and `COPYRIGHT` for the notice. If you build on it, keep the
+notice and the attribution to Jyotiprakash Mishra, and release your changes under the same
+terms.

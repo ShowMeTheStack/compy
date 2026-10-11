@@ -15,5 +15,6 @@
   "devDependencies": {
     "@compy/libc": "*",
     "@compy/testgen": "*"
-  }
+  },
+  "license": "GPL-3.0-or-later"
 }
