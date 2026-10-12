@@ -42,7 +42,8 @@ export function runWithClang(source: string, stdin = '', argv: string[] = []): {
     let stdout = '';
     let exit = 0;
     try {
-      stdout = execFileSync(bin, argv.slice(1), { input: stdin, encoding: 'utf8', timeout: 10_000 });
+      // Run inside the scratch directory so programs that create files do not litter the repo.
+      stdout = execFileSync(bin, argv.slice(1), { input: stdin, encoding: 'utf8', timeout: 10_000, cwd: dir });
     } catch (e) {
       const err = e as { status?: number; stdout?: string | Buffer };
       exit = typeof err.status === 'number' ? err.status : 1;
